@@ -2,13 +2,8 @@
 /*
 Template Name: Subscribe Intend
 */
-include plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
-define('WP_DEBUG', true);
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-echo "<pre>";
+require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
 $custom = new Custom_Subscription;
 $details = $custom->order_details();

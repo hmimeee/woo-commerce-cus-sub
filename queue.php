@@ -1,4 +1,5 @@
 <?php
+
 get_header();
 /*
 Template Name: My Queue Page
@@ -16,16 +17,17 @@ $user = wp_get_current_user();
 global $wpdb;
 $table = 'woocommerce_queue_data';
 $query = "SELECT * FROM $table
-WHERE  `month_id` = $currentmonth
-AND  `year` = $currentyear
-AND `customer_id` = $user->ID
-AND `status` = 'Active'";
-$singlerowresults = $wpdb->get_row($query);
-$query = "SELECT * FROM $table
 WHERE  `customer_id` = $user->ID
 AND `status` = 'Active'
 ORDER BY year ASC, month_id ASC";
+$singlerowresults = $wpdb->get_row($query);
 $queues = $wpdb->get_results($query);
+
+$instance = new Custom_Subscription();
+$sub = $instance->get_subscription();
+
+if ($sub)
+    $items = array_values($sub->get_items());
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
@@ -37,19 +39,24 @@ $queues = $wpdb->get_results($query);
                     <div class="col-md-6">
                         <div class="sidebar-content">
                             <div class="welcome-content">
-                                    <img src="/wp-content/uploads/2021/06/Scentdoor.png" alt="img">
-                                    <h4>Welcome</h4>
-                                    <h3>Get your favorite scents in sequence</h3>
-                                    <?php if (!empty($singlerowresults)) : ?>
-                                        <a href="/subscribe-intend">Subscribe</a>
-                                    <?php endif ?>
-                                </div>
+                                <img src="/wp-content/uploads/2021/06/Scentdoor.png" alt="img">
+                                <h4>Welcome</h4>
+                                <h3>Get your favorite scents in sequence</h3>
+                                <?php if (!empty($singlerowresults) && $sub) : ?>
+                                    <a href="/unsubscribe-intend">Cancel Subscription</a>
+                                <?php elseif (!empty($singlerowresults)) : ?>
+                                    <a href="/subscribe-intend">Subscribe</a>
+                                <?php endif ?>
+                            </div>
                         </div>
                     </div>
 
                     <div class="col-md-6">
-                        <div id="sortable">
-                            <?php foreach ($queues as $single) : ?>
+                        <div id="delivered">
+                            <?php foreach ($queues as $key => $single) :
+                                if (!empty($items) && !$items[$key]->get_meta('Delivered'))
+                                    continue;
+                            ?>
                                 <div class="single-sidebarproduct" data-id="<?= $single->id; ?>">
                                     <h3>
                                         <?php
@@ -63,17 +70,54 @@ $queues = $wpdb->get_results($query);
                                     <div class="flexdiv">
                                         <?php
                                         $product = wc_get_product($single->product_id);
-
                                         $url = get_permalink($single->product_id);
                                         ?>
-
                                         <a href="<?= $url; ?>" target="_blank">
-
-
                                             <?php $image = wp_get_attachment_image_src(get_post_thumbnail_id($single->product_id), 'single-post-thumbnail'); ?>
-
                                             <img src="<?php echo $image[0]; ?>" data-id="<?php echo $single->product_id; ?>">
+                                            <div class="single-dt">
+                                                <h4>
+                                                    <?php
 
+                                                    echo $product->get_name();
+                                                    ?>
+                                                </h4>
+                                                <span>Get details</span>
+                                                <h5>Size: <?php
+                                                            $variation = wc_get_product($single->variation_id);
+                                                            echo $variation->attributes['pa_size'];
+                                                            ?>
+                                                </h5>
+                                                <h5>Delivered: Yes</h5>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </div>
+                            <?php endforeach ?>
+                        </div>
+                        <div id="sortable">
+                            <?php foreach ($queues as $key => $single) :
+                                if (!empty($items) && $items[$key]->get_meta('Delivered'))
+                                    continue;
+                            ?>
+                                <div class="single-sidebarproduct" data-id="<?= $single->id; ?>">
+                                    <h3>
+                                        <?php
+                                        $monthNum  = $single->month_id;
+                                        $dateObj   = DateTime::createFromFormat('!m', $monthNum);
+                                        $monthName = $dateObj->format('F');
+                                        echo $monthName . " - " . $single->year;
+                                        ?>
+                                    </h3>
+
+                                    <div class="flexdiv">
+                                        <?php
+                                        $product = wc_get_product($single->product_id);
+                                        $url = get_permalink($single->product_id);
+                                        ?>
+                                        <a href="<?= $url; ?>" target="_blank">
+                                            <?php $image = wp_get_attachment_image_src(get_post_thumbnail_id($single->product_id), 'single-post-thumbnail'); ?>
+                                            <img src="<?php echo $image[0]; ?>" data-id="<?php echo $single->product_id; ?>">
                                             <div class="single-dt">
                                                 <h4>
                                                     <?php
@@ -93,7 +137,6 @@ $queues = $wpdb->get_results($query);
                                             </div>
                                         </a>
 
-
                                         <div class="controls-option">
                                             <div class="sideclose">
                                                 <button class="delbtn" data-customer="<?= $single->customer_id; ?>" data-id="<?= $single->id; ?>">
@@ -112,35 +155,27 @@ $queues = $wpdb->get_results($query);
                             <?php endforeach ?>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
     </div>
-
-
 </div>
 
 <script src="//code.jquery.com/jquery-1.12.4.js"></script>
 <script src="//code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 <script>
     $("#sortable").sortable({
-
         start: function(e, ui) {
             $(this).attr('data-previndex', ui.item.index());
         },
         update: function(e, ui) {
-            //location.reload();
             var dataid = ui.item.data('id');
             var newIndex = ui.item.index();
             var oldIndex = $(this).attr('data-previndex');
             var element_id = ui.item.attr('id');
-            //alert('id of Item moved = '+dataid+' old position = '+oldIndex+' new position = '+newIndex);
-            //$(this).removeAttr('data-previndex');
-
             var ajaxurl = "/wp-admin/admin-ajax.php";
-            $.ajax({
 
+            $.ajax({
                 type: 'POST',
                 url: ajaxurl,
                 data: {
@@ -150,24 +185,20 @@ $queues = $wpdb->get_results($query);
                     "new_pos": newIndex
                 },
                 success: function(response) {
-                    location.reload();
-                    //console.log(response);
+                    // location.reload();
                 }
             });
         }
     });
     $("#sortable").disableSelection();
-</script>
-<script>
+
     jQuery('.delbtn').click(function() {
         var d = jQuery(this).data('id');
         var c = jQuery(this).data('customer');
-        //     console.log(d);
         alert("Are you sure you’d like to remove this item");
         event.preventDefault();
         var ajaxurl = "/wp-admin/admin-ajax.php";
         jQuery.ajax({
-
             type: 'POST',
             url: ajaxurl,
             data: {
@@ -175,15 +206,10 @@ $queues = $wpdb->get_results($query);
                 "productid": d,
                 "customerid": c
             },
-
-
-
             success: function(response) {
-
                 location.reload();
             }
         });
-
     });
 </script>
 

@@ -1,4 +1,11 @@
 <?php
+// define('WP_DEBUG', true);
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
+
+// echo "<pre>";
+
+require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
 add_action('wp_enqueue_scripts', 'porto_child_css', 1001);
 
@@ -74,19 +81,13 @@ function porto_child_additional_info_based_on_type()
                     },
 
                     success: function(response) {
-                        //console.log(response);
-                        if (response == "guest0") {
-                            window.location = "/my-account/";
-                        } else if (response == "yes0") {
+                        if (response.status) {
                             jQuery('.add_to_queue').hide();
-                            jQuery('.queueaddedshow').html('<button class="aleartbg added-queue button alt disabled wc-variation-selection-needed" disabled>Already On Your Queue</button> <a href="/queue" class="view-queues added-queue button alt disabled wc-variation-selection-needed">View Queue</a>');
-                        } else {
-                            jQuery('.add_to_queue').hide();
-                            //jQuery(".forsidebarclass").show();
                             jQuery('.queueaddedshow').html('<button class="added-queue button alt disabled wc-variation-selection-needed" disabled>Added Queue</button> <a href="/queue/" class="view-queues added-queue button alt disabled wc-variation-selection-needed">View Queue</a>');
-                            //jQuery(".forsidebarclass").html(response);
+                        } else {
+                            jQuery('.alert').remove();
+                            jQuery('div.notice').after('<p class="alert alert-warning">' + response.message + '</p>');
                         }
-
                     }
 
 
@@ -125,32 +126,50 @@ function post_word_count()
 
         $user = wp_get_current_user();
 
-
-
         global $wpdb;
         $table_perfixed = 'woocommerce_queue_data';
 
-        $products_id = $_POST['productid'];
+        $product_id = $_POST['productid'];
         $variation_id = $_POST['variationid'];
+        $product = wc_get_product($product_id);
+        
+        //Select the package
+        if (has_term('luxury', 'product_cat', $product_id)) {
+            $package = 'luxury';
+        } else {
+            $package = 'regular';
+        }
 
-        $defaultcheck = $wpdb->get_results("SELECT * FROM $table_perfixed
-        WHERE `product_id` = $products_id
-        AND `variation_id` = $variation_id
-        AND `customer_id` = $user->ID
-        AND `status` = 'Active'");
+        $instance = new Custom_Subscription();
+        $queue = $instance->get_queues(true);
+        if (has_term('luxury', 'product_cat', $queue->product_id)) {
+            $has_package = 'luxury';
+        } else {
+            $has_package = 'regular';
+        }
 
-        if (empty($defaultcheck)) {
-            $results = $wpdb->get_results(" SELECT * FROM $table_perfixed
-        WHERE  `month_id` = $currentmonth
-        AND  `year` = $currentyear
-        AND `customer_id` = $user->ID");
+        if ($has_package != $package) {
+            return wp_send_json([
+                'status' => false,
+                'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
+            ]);
+        }
 
+        if ($queue->variation_id != $variation_id)
+            return wp_send_json([
+                'status' => false,
+                'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
+            ]);
+
+        $has_product = $instance->get_queues(true);
+        if (!$has_product) {
+            $results = $instance->get_queues();
 
             if (empty($results)) {
                 $wpdb->insert(
                     'woocommerce_queue_data',
                     array(
-                        'product_id' => $products_id,
+                        'product_id' => $product_id,
                         'variation_id' => $variation_id,
                         'customer_id' => $user->ID,
                         'month_id' => $currentmonth,
@@ -162,11 +181,10 @@ function post_word_count()
                     )
                 );
             } else {
-
-                $searchresults = $wpdb->get_results("
-        SELECT *
-        FROM $table_perfixed WHERE `customer_id` = $user->ID ORDER BY year DESC, month_id DESC LIMIT 1
-    ");
+                $searchresults = $wpdb->get_results("SELECT * FROM $table_perfixed
+                    WHERE `customer_id` = $user->ID
+                    ORDER BY year DESC, month_id DESC LIMIT 1
+                    ");
 
                 if ($searchresults[0]->month_id < 12) {
                     $newmonth = $searchresults[0]->month_id + 1;
@@ -179,7 +197,7 @@ function post_word_count()
                 $wpdb->insert(
                     'woocommerce_queue_data',
                     array(
-                        'product_id' => $products_id,
+                        'product_id' => $product_id,
                         'variation_id' => $variation_id,
                         'customer_id' => $user->ID,
                         'month_id' => $newmonth,
@@ -192,14 +210,21 @@ function post_word_count()
                 );
             }
 
-
-            die();
-            return true;
+            return wp_send_json([
+                'status' => true,
+                'message' => 'Your product has been added to the queue'
+            ]);
         } else {
-            echo "yes";
+            return wp_send_json([
+                'status' => false,
+                'message' => 'The product is already exists in the queue'
+            ]);
         }
     } else {
-        echo "guest";
+        return wp_send_json([
+            'status' => false,
+            'message' => 'Your must login first'
+        ]);
     }
 }
 
@@ -243,32 +268,18 @@ function post_data_del()
     }
 }
 
-
 add_action('wp_ajax_post_data_del', 'post_data_del');
 add_action('wp_ajax_nopriv_post_data_del', 'post_data_del');
 
 
-
-
-
-
-
 //dragable effect for queue change
-//dragable effect for queue change
-//dragable effect for queue change
-
-
-
 function post_data_drag()
 {
-
     global $wpdb;
 
     $user = wp_get_current_user();
     $table_perfixed = 'woocommerce_queue_data';
     $datapostion = $_POST['postdataid'];
-
-    //exit();
 
     $getsrow = $wpdb->get_row("SELECT * FROM $table_perfixed WHERE  `id` = $datapostion");
 
@@ -435,12 +446,16 @@ function post_data_drag()
             $updatecurryear = $currentyear + 1;
         }
 
-        $updaterow = $wpdb->get_row("
-		 UPDATE $table_perfixed SET `month_id` = $updatenewcurrdate , `year` = $updatecurryear WHERE  `id` = $single->id
-	");
-
+        $updaterow = $wpdb->get_row("UPDATE $table_perfixed
+        SET `month_id` = $updatenewcurrdate ,
+        `year` = $updatecurryear
+        WHERE  `id` = $single->id
+        ");
         $dateincrement++;
     }
+
+    $instance = new Custom_Subscription();
+    $instance->update_subscription();
 }
 
 add_action('wp_ajax_post_data_drag', 'post_data_drag');
@@ -453,10 +468,8 @@ add_action('wp_ajax_nopriv_post_data_drag', 'post_data_drag');
 add_action('woocommerce_before_thankyou', 'has_custom_subscription_for_order');
 function has_custom_subscription_for_order()
 {
-    include plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
-
     $order = wc_get_order(WC()->session->get('subscription_order'));
-    // WC()->session->subscription_order = null;
+    WC()->session->subscription_order = null;
 
     if (!$order)
         return false;
@@ -486,4 +499,12 @@ function payment_gateways_based_on_subscription($available_gateways)
     }
 
     return $available_gateways;
+}
+
+add_action('woocommerce_admin_order_item_values', 'hide_monthly_queue');
+function hide_monthly_queue()
+{
+    echo "
+    <script>jQuery('.woocommerce-order-details__title').parent().remove();</script>
+    ";
 }

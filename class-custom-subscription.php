@@ -2,12 +2,15 @@
 
 class Custom_Subscription
 {
-    public $user_id, $user;
+    public $user_id, $user, $date;
 
     public function __construct()
     {
         $this->user_id = get_current_user_id();
         $this->user = get_user_by('ID', $this->user_id);
+
+        //Date object
+        $this->date = (new DateTime())->modify('first day of this month');
     }
 
 
@@ -72,16 +75,12 @@ class Custom_Subscription
             'shipping_postcode' => $s_postcode
         );
 
-        //Date object for the queue in subscription
-        $date = new DateTime();
-        $date->modify('first day of this month');
-
         return (object) [
             'data' => $data,
             'billing_address' => $billing_address,
             'shipping_address' => $shipping_address,
             'user' => $this->user,
-            'date' => $date
+            'date' => $this->date
         ];
     }
 
@@ -134,12 +133,6 @@ class Custom_Subscription
      */
     public function create_subscription($order_id): bool
     {
-        define('WP_DEBUG', true);
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-echo "<pre>";
-
         $details = $this->order_details();
 
         //Create the subscription
@@ -158,14 +151,40 @@ echo "<pre>";
         $sub->set_address($details->billing_address, 'billing');
         $sub->set_address($details->shipping_address, 'shipping');
 
-        //Date object for the queue in subscription
-        $date = clone $details->date;
+        //Add items to the subscription
+        $this->update_subscription_items($sub);
+
+        //Calculate the amounts
+        $sub->calculate_totals();
+
+        //Status update
+        $sub->update_status('active');
+
+        return true;
+    }
+
+    public function update_subscription_items($sub)
+    {
+        //Remove subscription items
+        $sub->remove_order_items('line_item');
+        // $items = $sub->get_items();
+
+        // $items_to_remove = [];
+        // foreach ($items as $key => $item) {
+        //     $metas = wcs_get_order_item_meta($item)->get_formatted();
+        //     foreach ($metas as $key => $meta) {
+        //         if($meta['key'] =='Delivered')
+        //         continue;
+
+        //         $items_to_remove [] = null;
+        //     }
+        // }
 
         // Add product to the subscription
         $queues = $this->get_queues();
+        $date = clone $this->date;
         $count = 0;
         foreach ($queues as $queue) {
-            $date->modify('+1 month');
             $product = wc_get_product($queue->product_id);
 
             //Check if product exist
@@ -180,26 +199,44 @@ echo "<pre>";
                 wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
             }
 
-            $this->add_monthly_item($item, $queue->product_id, $date->format('Y'), $date->format('F'));
-
             $count++;
+            $date->modify('+1 month');
         }
 
-        //Calculate the amounts
-        $sub->calculate_totals();
-
-        //Status update
-        $sub->update_status('active');
-
         //Update the dates
-        $date = clone $details->date;
+        $date = clone $this->date;
         $next_payment = (clone $date)->modify('+1 month')->format('Y-m-d H:i:s');
-        $end_date = ((clone $date)->modify('+'.count($queues).' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
+        $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
-
-        return true;
     }
 
+    /**
+     * Update the subscription
+     * 
+     * @return void
+     */
+    public function update_subscription()
+    {
+        $user = wp_get_current_user();
+        $sub = reset(wcs_get_users_subscriptions($user->ID));
+
+        $this->update_subscription_items($sub);
+    }
+
+    public function get_subscription($user = null)
+    {
+        $user = $user ?? wp_get_current_user();
+        $sub = reset(wcs_get_users_subscriptions($user->ID));
+
+        if (wcs_user_has_subscription($user->ID, '', 'active'))
+            return $sub;
+
+        return null;
+    }
+
+    /**
+     * Deprecated function
+     */
     public function add_monthly_item($item_id, $product_id, $year = null, $month = null)
     {
         $year = $year ?? date('Y');
