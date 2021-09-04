@@ -84,20 +84,44 @@ class Custom_Subscription
         ];
     }
 
-    public function get_queues($single = false)
+    /**
+     * Get the queues data
+     * 
+     * @param bool $single `true` means single row, else all rows and `is_numeric` value for product id. Also $order = `row` means row id.
+     * @param string $order Ordering data as `ASC` or `DESC`
+     * @return mixed Array|Object
+     */
+    public function get_queues($single = false, $order = 'ASC')
     {
         //Queue data parsing
         global $wpdb;
         $table = 'woocommerce_queue_data';
-        $allQuery = "SELECT * FROM $table
-        WHERE  `customer_id` = $this->user_id
-        AND `status` = 'Active'
-        ORDER BY year ASC, month_id ASC";
+
+        if ($order == 'products') {
+            $query = "SELECT * FROM $table
+                WHERE  `customer_id` = $this->user_id
+                AND  `product_id` IN ($single)
+                AND `status` = 'Active'";
+        } elseif (is_numeric($single) && $order == 'product') {
+            $query = "SELECT * FROM $table
+                WHERE  `customer_id` = $this->user_id
+                AND `product_id` = $single
+                AND `status` = 'Active'";
+        } elseif ($order == 'row') {
+            $query = "SELECT * FROM $table 
+            WHERE  `customer_id` = $this->user_id
+            AND  `id` = $single";
+        } else {
+            $query = "SELECT * FROM $table
+                WHERE  `customer_id` = $this->user_id
+                AND `status` = 'Active'
+                ORDER BY year $order, month_id $order";
+        }
 
         if ($single)
-            return $wpdb->get_row($allQuery);
+            return $wpdb->get_row($query);
 
-        return $wpdb->get_results($allQuery);
+        return $wpdb->get_results($query);
     }
 
     /**
@@ -158,7 +182,10 @@ class Custom_Subscription
         $sub->calculate_totals();
 
         //Status update
-        $sub->update_status('active');
+        // $sub->update_status('active');
+
+        //Activate the subscription
+        WC_Subscriptions_Manager::activate_subscriptions_for_order($order_id);
 
         return true;
     }
@@ -167,18 +194,19 @@ class Custom_Subscription
     {
         //Remove subscription items
         $sub->remove_order_items('line_item');
-        // $items = $sub->get_items();
+        $items = $sub->get_items();
 
-        // $items_to_remove = [];
-        // foreach ($items as $key => $item) {
-        //     $metas = wcs_get_order_item_meta($item)->get_formatted();
-        //     foreach ($metas as $key => $meta) {
-        //         if($meta['key'] =='Delivered')
-        //         continue;
+        $items_to_add = [];
+        foreach ($items as $key => $item) {
+            $metas = wcs_get_order_item_meta($item)->get_formatted();
 
-        //         $items_to_remove [] = null;
-        //     }
-        // }
+            foreach ($metas as $key => $meta) {
+                if ($meta['key'] == 'Delivered') {
+                    wc_delete_order_item($item);
+                    $items_to_add[] = $item;
+                }
+            }
+        }
 
         // Add product to the subscription
         $queues = $this->get_queues();
@@ -205,7 +233,7 @@ class Custom_Subscription
 
         //Update the dates
         $date = clone $this->date;
-        $next_payment = (clone $date)->modify('+1 month')->format('Y-m-d H:i:s');
+        $next_payment = (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s');
         $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
     }
@@ -217,8 +245,7 @@ class Custom_Subscription
      */
     public function update_subscription()
     {
-        $user = wp_get_current_user();
-        $sub = reset(wcs_get_users_subscriptions($user->ID));
+        $sub = $this->get_subscription();
 
         $this->update_subscription_items($sub);
     }
@@ -226,12 +253,10 @@ class Custom_Subscription
     public function get_subscription($user = null)
     {
         $user = $user ?? wp_get_current_user();
-        $sub = reset(wcs_get_users_subscriptions($user->ID));
+        $sub_array = wcs_get_users_subscriptions($user->ID);
+        $sub = end($sub_array);
 
-        if (wcs_user_has_subscription($user->ID, '', 'active'))
-            return $sub;
-
-        return null;
+        return $sub;
     }
 
     /**
@@ -250,6 +275,56 @@ class Custom_Subscription
             'year' => $year,
             'month' => $month,
         ));
+
+        return $insert;
+    }
+
+    public function add_to_queue($product_id, $variation_id)
+    {
+        $results = $this->get_queues();
+        global $wpdb;
+
+        if (!$results) {
+            $insert = $wpdb->insert(
+                'woocommerce_queue_data',
+                array(
+                    'product_id' => $product_id,
+                    'variation_id' => $variation_id,
+                    'customer_id' => $this->user->ID,
+                    'month_id' => date('n'),
+                    'year' => date("Y"),
+                    'status' => 'Active'
+                ),
+                array(
+                    '%s'
+                )
+            );
+        } else {
+            $exist_product = $this->get_queues(true, 'DESC');
+
+            if ($exist_product->month_id < 12) {
+                $newmonth = $exist_product->month_id + 1;
+                $newyear = $exist_product->year;
+            } else {
+                $newmonth = 1;
+                $newyear = $exist_product->year + 1;
+            }
+
+            $insert = $wpdb->insert(
+                'woocommerce_queue_data',
+                array(
+                    'product_id' => $product_id,
+                    'variation_id' => $variation_id,
+                    'customer_id' => $this->user->ID,
+                    'month_id' => $newmonth,
+                    'year' => $newyear,
+                    'status' => 'Active'
+                ),
+                array(
+                    '%s'
+                )
+            );
+        }
 
         return $insert;
     }

@@ -67,7 +67,6 @@ function porto_child_additional_info_based_on_type()
 
             var product_id = jQuery('input[name="product_id"]').val();
             var variation_id = jQuery('input[name="variation_id"]').val();
-            //console.log(variation_id);
             if (variation_id.length != 0) {
 
                 var ajaxurl = "/wp-admin/admin-ajax.php";
@@ -89,8 +88,6 @@ function porto_child_additional_info_based_on_type()
                             jQuery('div.notice').after('<p class="alert alert-warning">' + response.message + '</p>');
                         }
                     }
-
-
                 });
             } else {
                 alert("Size Field is Required");
@@ -126,13 +123,9 @@ function post_word_count()
 
         $user = wp_get_current_user();
 
-        global $wpdb;
-        $table_perfixed = 'woocommerce_queue_data';
-
         $product_id = $_POST['productid'];
         $variation_id = $_POST['variationid'];
-        $product = wc_get_product($product_id);
-        
+
         //Select the package
         if (has_term('luxury', 'product_cat', $product_id)) {
             $package = 'luxury';
@@ -142,6 +135,7 @@ function post_word_count()
 
         $instance = new Custom_Subscription();
         $queue = $instance->get_queues(true);
+
         if (has_term('luxury', 'product_cat', $queue->product_id)) {
             $has_package = 'luxury';
         } else {
@@ -155,64 +149,26 @@ function post_word_count()
             ]);
         }
 
-        if ($queue->variation_id != $variation_id)
+        $has_variation = new WC_Product_Variation($queue->variation_id);
+        $new_variation = new WC_Product_Variation($variation_id);
+
+        if ($queue && $has_variation->price != $new_variation->price)
             return wp_send_json([
                 'status' => false,
-                'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
+                'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
             ]);
 
-        $has_product = $instance->get_queues(true);
+        $has_product = $instance->get_queues($product_id, 'product');
         if (!$has_product) {
-            $results = $instance->get_queues();
-
-            if (empty($results)) {
-                $wpdb->insert(
-                    'woocommerce_queue_data',
-                    array(
-                        'product_id' => $product_id,
-                        'variation_id' => $variation_id,
-                        'customer_id' => $user->ID,
-                        'month_id' => $currentmonth,
-                        'year' => $currentyear,
-                        'status' => 'Active'
-                    ),
-                    array(
-                        '%s'
-                    )
-                );
-            } else {
-                $searchresults = $wpdb->get_results("SELECT * FROM $table_perfixed
-                    WHERE `customer_id` = $user->ID
-                    ORDER BY year DESC, month_id DESC LIMIT 1
-                    ");
-
-                if ($searchresults[0]->month_id < 12) {
-                    $newmonth = $searchresults[0]->month_id + 1;
-                    $newyear = $searchresults[0]->year;
-                } else {
-                    $newmonth = 1;
-                    $newyear = $searchresults[0]->year + 1;
-                }
-
-                $wpdb->insert(
-                    'woocommerce_queue_data',
-                    array(
-                        'product_id' => $product_id,
-                        'variation_id' => $variation_id,
-                        'customer_id' => $user->ID,
-                        'month_id' => $newmonth,
-                        'year' => $newyear,
-                        'status' => 'Active'
-                    ),
-                    array(
-                        '%s'
-                    )
-                );
-            }
+            if ($instance->add_to_queue($product_id, $variation_id))
+                return wp_send_json([
+                    'status' => true,
+                    'message' => 'Your product has been added to the queue'
+                ]);
 
             return wp_send_json([
-                'status' => true,
-                'message' => 'Your product has been added to the queue'
+                'status' => false,
+                'message' => 'Something went wrong, please contact support'
             ]);
         } else {
             return wp_send_json([
@@ -271,193 +227,156 @@ function post_data_del()
 add_action('wp_ajax_post_data_del', 'post_data_del');
 add_action('wp_ajax_nopriv_post_data_del', 'post_data_del');
 
+function update_queue_only($list, $date)
+{
+    //Queue data parsing
+    global $wpdb;
+    $table = 'woocommerce_queue_data';
+
+    $query = '';
+    foreach ($list as $key => $data) {
+        //Update queue data placement
+        $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
+        $date->modify('+1 month');
+    }
+
+    //Update the queue
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($query);
+
+    return true;
+}
+
 
 //dragable effect for queue change
 function post_data_drag()
 {
-    global $wpdb;
-
-    $user = wp_get_current_user();
-    $table_perfixed = 'woocommerce_queue_data';
-    $datapostion = $_POST['postdataid'];
-
-    $getsrow = $wpdb->get_row("SELECT * FROM $table_perfixed WHERE  `id` = $datapostion");
-
-    $oldposition = $_POST['old_pos'];
-    $newposition = $_POST['new_pos'];
-
-    if ($oldposition < $newposition) {
-
-        $newcurrdate = $getsrow->month_id + $newposition + 1;
-        $newcurryear = $getsrow->year;
-        if ($newcurrdate == 13) {
-            $newcurrdate = 1;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 14) {
-            $newcurrdate = 2;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 15) {
-            $newcurrdate = 3;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 16) {
-            $newcurrdate = 4;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 17) {
-            $newcurrdate = 5;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 18) {
-            $newcurrdate == 6;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 19) {
-            $newcurrdate == 7;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 20) {
-            $newcurrdate == 8;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 21) {
-            $newcurrdate == 9;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 22) {
-            $newcurrdate == 10;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 23) {
-            $newcurrdate == 11;
-            $newcurryear = $getsrow->year + 1;
-        }
-        if ($newcurrdate == 24) {
-            $newcurrdate == 12;
-            $newcurryear = $getsrow->year + 1;
-        }
-
-
-        $dragrowupdate = $wpdb->get_row("
-		 UPDATE $table_perfixed SET `month_id` = $newcurrdate , `year` = $newcurryear WHERE  `id` = $datapostion
-	");
-    }
-    if ($oldposition > $newposition) {
-        $datacal = $newposition;
-
-        $showresultsforview = $wpdb->get_results("SELECT * FROM $table_perfixed WHERE `customer_id` = $user->ID AND `status` = 'Active' ORDER BY year ASC, month_id ASC");
-
-        $newincrement = 1;
-        foreach ($showresultsforview as $ssingle) {
-
-            if ($newincrement == $datacal) {
-
-                $updatecheck = $wpdb->get_row("
-			 SELECT * FROM $table_perfixed WHERE `id` = $ssingle->id
-		");
-
-                $updaterow = $wpdb->get_row("
-			 UPDATE $table_perfixed SET `month_id` = $updatecheck->month_id , `year` = $updatecheck->year WHERE  `id` = $datapostion
-		");
-            }
-
-            $newincrement++;
-        }
-
-        if ($datacal == 0) {
-
-            $newcheck = 1;
-            foreach ($showresultsforview as $ssingle) {
-                if ($newcheck == 1) {
-
-                    $oneupdatecheck = $wpdb->get_row("
-			 SELECT * FROM $table_perfixed WHERE `id` = $ssingle->id
-		");
-                    $order_monthid = $oneupdatecheck->month_id - 1;
-                    $firstinfoupdate = $wpdb->get_row("
-			 UPDATE $table_perfixed SET `month_id` = $order_monthid , `year` = $oneupdatecheck->year WHERE  `id` = $datapostion
-		");
-                }
-
-                $newcheck++;
-            }
-        }
-    }
-
-
-    $showresults = $wpdb->get_results("SELECT * FROM $table_perfixed WHERE `customer_id` = $user->ID AND `status` = 'Active' ORDER BY year ASC, month_id ASC");
-
-
-    $dateincrement = 0;
-    foreach ($showresults as $single) {
-        $currentyear = date("Y");
-        $currentmonth = date("n");
-        $updatenewcurrdate = $currentmonth + $dateincrement;
-        $updatecurryear = $currentyear;
-
-        if ($updatenewcurrdate == 13) {
-            $updatenewcurrdate = 1;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 14) {
-            $updatenewcurrdate = 2;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 15) {
-            $updatenewcurrdate = 3;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 16) {
-            $updatenewcurrdate = 4;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 17) {
-            $updatenewcurrdate = 5;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 18) {
-            $updatenewcurrdate = 6;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 19) {
-            $updatenewcurrdate = 7;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 20) {
-            $updatenewcurrdate = 8;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 21) {
-            $updatenewcurrdate = 9;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 22) {
-            $updatenewcurrdate = 10;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 23) {
-            $updatenewcurrdate = 11;
-            $updatecurryear = $currentyear + 1;
-        }
-        if ($updatenewcurrdate == 24) {
-            $updatenewcurrdate = 12;
-            $updatecurryear = $currentyear + 1;
-        }
-
-        $updaterow = $wpdb->get_row("UPDATE $table_perfixed
-        SET `month_id` = $updatenewcurrdate ,
-        `year` = $updatecurryear
-        WHERE  `id` = $single->id
-        ");
-        $dateincrement++;
-    }
-
     $instance = new Custom_Subscription();
-    $instance->update_subscription();
+
+    //get the required data from the database
+    $queue_row = $instance->get_queues($_POST['postdataid'], 'row');
+    $queues = $instance->get_queues();
+    $new_place = $_POST['new_pos'];
+
+    //Predefine variables for the loop
+    $first_line = [];
+    $second_line = [];
+    $got_place = false;
+    $last_data = end($queues);
+
+    //Queue re-arrange
+    foreach ($queues as $place => $data) {
+        if ($place == $new_place) {
+            $got_place = true;
+
+            if ($last_data != $data) {
+                $first_line[] = $queue_row;
+                $second_line[] = $data;
+            }
+
+            if ($last_data == $data) {
+                $second_line[] = $queue_row;
+                $first_line[] = $data;
+            }
+        } else {
+            if ($got_place && $queue_row != $data)
+                $second_line[] = $data;
+
+            if (!$got_place && $queue_row != $data)
+                $first_line[] = $data;
+        }
+    }
+
+    //Marge the lines into a list
+    $list = array_merge($first_line, $second_line);
+
+    //Get the first day of the current month
+    $date = $instance->date;
+
+    //Get the subscription data
+    $sub = end(wcs_get_users_subscriptions());
+
+    if (!$sub) {
+        update_queue_only($list, $date);
+
+        //Return the response
+        return wp_send_json([
+            'status' => true,
+            'message' => 'Queue updated successfully'
+        ]);
+    }
+
+    //Get the items
+    $items = $sub->get_items();
+
+    $items_to_keep = []; //Empty array for the delivered items
+    foreach ($items as $key => $item) {
+
+        //Check if the item has been delivered, then add it to the keep list. Also update the date.
+        if ($item->get_meta('Delivered')) {
+            $items_to_keep[] = $item->get_product_id();
+            $date->modify('+1 month');
+            continue;
+        }
+
+        //Delete the item from the subscription
+        wc_delete_order_item($item->get_id());
+    }
+
+    $table = 'woocommerce_queue_data'; //Get the table name
+    $query = ''; //Balnk variable for the query
+    foreach ($list as $key => $data) {
+
+        //Check if the item has been delivered, then skip it
+        if (in_array($data->product_id, $items_to_keep))
+            continue;
+
+        $product = wc_get_product($data->product_id); //Get the product object
+        $variation = new WC_Product_Variation($data->variation_id); //Get the variation object
+        $price = $variation->price; //Get the amount of the variation
+
+        //Add amount if the item is first one, else 0 amount
+        if ($key == 0 && count($items_to_keep) == 0)
+            $item = $sub->add_product($product, 1, [
+                'total' => $price
+            ]);
+        else
+            $item = $sub->add_product($product, 1, [
+                'total' => 0
+            ]);
+
+        //Add item meta to track the month
+        wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+
+        //Update queue data placement
+        $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
+
+        //Check if the list has end
+        if (end($list) != $data)
+            $date->modify('+1 month');
+    }
+
+    //Get the subscription data
+    $sub = reset(wcs_get_users_subscriptions());
+
+    //Calculate the amounts
+    $sub->calculate_totals();
+
+    //Update the subscription date
+    $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+
+    //Update the queue
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($query);
+
+    //Return the response
+    return wp_send_json([
+        'status' => true,
+        'message' => 'Queue updated successfully'
+    ]);
 }
 
+//Register the actions for ajax request
 add_action('wp_ajax_post_data_drag', 'post_data_drag');
 add_action('wp_ajax_nopriv_post_data_drag', 'post_data_drag');
 
@@ -507,4 +426,77 @@ function hide_monthly_queue()
     echo "
     <script>jQuery('.woocommerce-order-details__title').parent().remove();</script>
     ";
+}
+
+function item_delivery_status($post)
+{
+    add_meta_box(
+        'wc_subscription_item_delivery', // Unique ID
+        'Item Delivery Status Update', // Box title
+        'wc_subscription_item_delivery_html', // Content callback, must be of type callable
+        'shop_subscription', // Post type
+    );
+}
+add_action('add_meta_boxes',  'item_delivery_status');
+
+function wc_subscription_item_delivery_html($post)
+{
+    $sub = wcs_get_subscription(get_the_ID());
+?>
+    <?php wp_nonce_field() ?>
+    <select name="item_id" id="item_id" class="postbox">
+        <option value="">Select item</option>
+        <?php foreach ($sub->get_items() as $key => $item) : ?>
+            <?php if ($item->get_meta('Delivered')) continue; ?>
+            <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?></option>
+        <?php endforeach ?>
+    </select>
+    <button type="button" id="deliver_item" class="button">Set Delivered</button>
+
+    <script>
+        jQuery('#deliver_item').click(function(e) {
+            e.preventDefault();
+
+            jQuery.ajax({
+                url: '<?= admin_url('admin-ajax.php?action=deliver_item') ?>',
+                data: {
+                    'item': jQuery('#item_id').val(),
+                    '_wpnonce': '<?= wp_create_nonce() ?>',
+                    'subscription': '<?= $sub->get_id() ?>'
+                },
+                type: 'POST',
+                success: function(res) {
+                    if (res.status)
+                        location.reload();
+                }
+            })
+        })
+    </script>
+<?php
+}
+
+add_action("wp_ajax_deliver_item", "deliver_item");
+add_action("wp_ajax_nopriv_deliver_item", "deliver_item");
+
+function deliver_item()
+{
+    $sub = wcs_get_subscription($_POST['subscription']);
+    $item = wcs_get_order_item($_POST['item'], $sub);
+    $has_delivered = $item->get_meta('Delivered');
+
+    if ($has_delivered)
+        //Return the response
+        return wp_send_json([
+            'status' => false,
+            'message' => 'Item already delivered'
+        ]);
+
+    wc_add_order_item_meta($item->get_id(), 'Delivered', 'Yes', true);
+    $sub->add_order_note('Item "' . $item->get_product()->name . '" has been delivered.');
+
+    //Return the response
+    return wp_send_json([
+        'status' => true,
+        'message' => 'Item delivery status updated successfully'
+    ]);
 }

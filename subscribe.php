@@ -32,11 +32,11 @@ $order = wc_get_order($order_id);
 $product = wc_get_product($queue->product_id);
 
 //get the amount
-$amount = $custom->get_amount($queue->product_id);
+$amount = $custom->get_amount($queue->product_id, $queue->variation_id);
 
 //Add product to the order
 $item = $order->add_product($product, 1, ['total' => $amount]);
-wc_add_order_item_meta($item, 'Deliverable Date', $details->date->modify('+1 month')->format('F Y'), true);
+wc_add_order_item_meta($item, 'Deliverable Date', $details->date->format('F Y'), true);
 
 //Calculate the amounts
 $order->calculate_totals();
