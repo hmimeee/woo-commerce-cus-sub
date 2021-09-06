@@ -27,8 +27,6 @@ $sub = $instance->get_subscription();
 $items = [];
 if ($sub)
     $items = array_values($sub->get_items());
-// print_r(array_map(function($q) { return $q->get_product_id(); }, $items));
-// die;
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
@@ -40,7 +38,7 @@ if ($sub)
                     <div class="col-md-6">
                         <div class="sidebar-content">
                             <div class="welcome-content">
-                                <img src="<?= $porto_settings['logo']['url'] ?>" alt="Logo">
+                                <img width="150" src="<?= $porto_settings['logo']['url'] ?>" alt="Logo">
                                 <h4><?= _e('Welcome') ?></h4>
                                 <h3><?= _e('Get your favorite scents in sequentially') ?></h3>
                                 <?php if (!empty($queue)) : ?>

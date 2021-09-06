@@ -64,7 +64,6 @@ function porto_child_additional_info_based_on_type()
         });
 
         jQuery(".add_to_queue").click(function() {
-
             jQuery('.alert').remove();
             var product_id = jQuery('input[name="product_id"]').val();
             var variation_id = jQuery('input[name="variation_id"]').val();
@@ -83,7 +82,7 @@ function porto_child_additional_info_based_on_type()
                     success: function(response) {
                         if (response.status) {
                             jQuery('.add_to_queue').hide();
-                            jQuery('.queueaddedshow').html('<button class="added-queue button alt disabled wc-variation-selection-needed" disabled>Added Queue</button> <a href="/queue/" class="view-queues added-queue button alt disabled wc-variation-selection-needed">View Queue</a>');
+                            jQuery('.queueaddedshow').html('<button class="added-queue button alt wc-variation-selection-needed" disabled>Added Queue</button> <a href="/queue/" class="view-queues added-queue button alt disabled wc-variation-selection-needed">View Queue</a>');
                         } else {
                             jQuery('.alert').remove();
                             jQuery('div.notice').after('<p class="alert alert-warning">' + response.message + '</p>');
@@ -163,19 +162,22 @@ function add_to_queue()
 
         if ($instance->add_to_queue($product_id, $variation_id)) {
             $sub = $instance->get_subscription();
-            $product = wc_get_product($product_id);
-            $item = $sub->add_product($product, 1, [
-                'total' => $queue ? 0 : $new_variation->price
-            ]);
+
+            if ($sub) {
+                $product = wc_get_product($product_id);
+                $item = $sub->add_product($product, 1, [
+                    'total' => $queue ? 0 : $new_variation->price
+                ]);
+
+                //Add item meta to track the month
+                wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+                $sub->calculate_totals();
+
+                //Update the subscription date
+                $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+            }
             $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
             $date->modify('+1 month');
-
-            //Add item meta to track the month
-            wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
-            $sub->calculate_totals();
-
-            //Update the subscription date
-            $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
 
             return wp_send_json([
                 'status' => true,
@@ -267,13 +269,13 @@ function post_data_del()
             $item->update_meta_data('Deliverable Date', $from_date->format('F Y'));
             $from_date->modify('+1 month');
         }
+
+        //Calculate the amounts
+        $sub->calculate_totals();
+
+        //Update the subscription date
+        $sub->update_dates(array('end' => $from_date->modify('last day of this month')->format('Y-m-d H:i:s')));
     }
-
-    //Calculate the amounts
-    $sub->calculate_totals();
-
-    //Update the subscription date
-    $sub->update_dates(array('end' => $from_date->modify('last day of this month')->format('Y-m-d H:i:s')));
 
     //Update the queue
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
