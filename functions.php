@@ -100,6 +100,16 @@ function porto_child_additional_info_based_on_type()
 }
 add_action('woocommerce_single_variation', 'porto_child_additional_info_based_on_type');
 
+add_action('woocommerce_after_account_navigation', 'my_subscription_link_replace');
+function my_subscription_link_replace()
+{
+?>
+    <script>
+        jQuery('.woocommerce-MyAccount-navigation-link--subscriptions a').attr('href', '/queue');
+    </script>
+<?php
+}
+
 function add_to_queue_btn()
 {
     echo '<span class="button add_to_queue button alt disabled wc-variation-selection-needed">Add to Queue</span>';
