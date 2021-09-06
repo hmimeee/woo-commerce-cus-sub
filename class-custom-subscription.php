@@ -124,6 +124,19 @@ class Custom_Subscription
         return $wpdb->get_results($query);
     }
 
+    public function empty_queue()
+    {
+        //Queue data parsing
+        global $wpdb;
+        $table = 'woocommerce_queue_data';
+
+        $query = "DELETE FROM $table
+                WHERE  `customer_id` = $this->user_id
+                ORDER BY year ASC, month_id ASC";
+
+        return $wpdb->query($query);
+    }
+
     /**
      * Subscription charge amount calculation
      * 
@@ -243,11 +256,17 @@ class Custom_Subscription
      * 
      * @return void
      */
-    public function update_subscription()
+    public function update_subscription($status = null)
     {
         $sub = $this->get_subscription();
 
+        if ($status) {
+            $sub->update_status('active');
+            return true;
+        }
+
         $this->update_subscription_items($sub);
+        return true;
     }
 
     public function get_subscription($user = null)
@@ -300,15 +319,9 @@ class Custom_Subscription
                 )
             );
         } else {
-            $exist_product = $this->get_queues(true, 'DESC');
-
-            if ($exist_product->month_id < 12) {
-                $newmonth = $exist_product->month_id + 1;
-                $newyear = $exist_product->year;
-            } else {
-                $newmonth = 1;
-                $newyear = $exist_product->year + 1;
-            }
+            $exist_product = end($this->get_queues());
+            $date = DateTime::createFromFormat('Y-m', $exist_product->year . '-' . $exist_product->month_id);
+            $date->modify('+1 month');
 
             $insert = $wpdb->insert(
                 'woocommerce_queue_data',
@@ -316,8 +329,8 @@ class Custom_Subscription
                     'product_id' => $product_id,
                     'variation_id' => $variation_id,
                     'customer_id' => $this->user->ID,
-                    'month_id' => $newmonth,
-                    'year' => $newyear,
+                    'month_id' => $date->format('n'),
+                    'year' => $date->format('Y'),
                     'status' => 'Active'
                 ),
                 array(
@@ -327,5 +340,40 @@ class Custom_Subscription
         }
 
         return $insert;
+    }
+
+    public function get_subscription_metas($queue)
+    {
+        $variation = new WC_Product_Variation($queue->variation_id);
+        $product = wc_get_product($queue->product_id);
+
+        if (has_term('luxury', 'product_cat', $queue->product_id)) {
+            $package = 'Luxury';
+        } else {
+            $package = 'Regular';
+        }
+
+        return [
+            'price' => $variation->price,
+            'type' => $package
+        ];
+    }
+
+    public function get_delivered_items($sub = null)
+    {
+        $sub = $sub ?? $this->get_subscription();
+
+        //Get the items
+        $items = $sub->get_items();
+
+        $delivered = [];
+        foreach ($items as $key => $item) {
+            if ($item->get_meta('Delivered')) {
+                $delivered[] = $item;
+                continue;
+            }
+        }
+
+        return $delivered;
     }
 }

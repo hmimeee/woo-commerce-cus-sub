@@ -5,11 +5,29 @@ Template Name: Subscribe Intend
 
 require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
-$custom = new Custom_Subscription;
-$details = $custom->order_details();
+$instance = new Custom_Subscription;
+$sub = $instance->get_subscription();
+
+if ($sub && isset($_GET['upgrade'])) {
+    //Remove subscription items
+    $sub->remove_order_items('line_item');
+    $instance->empty_queue();
+
+    //Redirect to the payment page
+    wp_redirect("/subscribe");
+    exit;
+} elseif ($sub) {
+    $instance->update_subscription('active');
+
+    //Redirect to the payment page
+    wp_redirect("/queue");
+    exit;
+}
+
+$details = $instance->order_details();
 
 //Queue first data
-$queue = $custom->get_queues(true);
+$queue = $instance->get_queues(true);
 
 //Check if queue is empty
 if (!$queue)
@@ -19,7 +37,7 @@ if (!$queue)
 $data = array_merge($details->data, $details->billing_address, $details->shipping_address);
 $checkout = new WC_Checkout();
 $order_id = $checkout->create_order($data);
-update_post_meta($order_id, '_customer_user', $custom->user_id);
+update_post_meta($order_id, '_customer_user', $instance->user_id);
 
 //Check if order created
 if (!$order_id)
@@ -32,7 +50,7 @@ $order = wc_get_order($order_id);
 $product = wc_get_product($queue->product_id);
 
 //get the amount
-$amount = $custom->get_amount($queue->product_id, $queue->variation_id);
+$amount = $instance->get_amount($queue->product_id, $queue->variation_id);
 
 //Add product to the order
 $item = $order->add_product($product, 1, ['total' => $amount]);

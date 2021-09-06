@@ -27,9 +27,6 @@ $sub = $instance->get_subscription();
 $items = [];
 if ($sub)
     $items = array_values($sub->get_items());
-
-// echo "<pre>";
-// print_r(array_map(function($q) { return $q->product_id; }, $queues));
 // print_r(array_map(function($q) { return $q->get_product_id(); }, $items));
 // die;
 ?>
@@ -45,13 +42,20 @@ if ($sub)
                             <div class="welcome-content">
                                 <img src="<?= $porto_settings['logo']['url'] ?>" alt="Logo">
                                 <h4><?= _e('Welcome') ?></h4>
-                                <h3><?= _e('Get your favorite scents in sequence') ?></h3>
-                                <?php if (!empty($queue) && $sub->get_status() == 'active') : ?>
+                                <h3><?= _e('Get your favorite scents in sequentially') ?></h3>
+                                <?php if (!empty($queue)) : ?>
+                                    <p class="mb-2"><?= _e('Subscription plan:') ?> <b><?= $instance->get_subscription_metas($queue)['price'] ?>$/Month</b></p>
+                                    <p><?= _e('Subscription product:') ?> <b><?= $instance->get_subscription_metas($queue)['type'] ?></b></p>
+                                <?php endif ?>
+                                <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
                                     <a href="/unsubscribe-intend"><?= _e('Cancel Subscription') ?></a>
-                                <?php elseif (!empty($queue) && $sub->get_status() == 'cancelled') : ?>
+                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
+                                <?php elseif (!empty($queue) && $sub && $sub->get_status() == 'cancelled') : ?>
                                     <a href="/subscribe-intend"><?= _e('Re-subscription') ?></a>
                                 <?php elseif (!empty($queue)) : ?>
                                     <a href="/subscribe-intend"><?= _e('Subscribe') ?></a>
+                                <?php elseif (empty($queue)) : ?>
+                                    <a href="/subscribe"><?= _e('Choose Package') ?></a>
                                 <?php endif ?>
                             </div>
                         </div>
@@ -115,7 +119,7 @@ if ($sub)
 
                                         <div class="controls-option">
                                             <div class="sideclose">
-                                                <button class="delbtn" data-customer="<?= $data->customer_id; ?>" data-id="<?= $single->id; ?>">
+                                                <button class="delbtn" data-customer="<?= $data->customer_id; ?>" data-id="<?= $data->id; ?>">
                                                     <i class="fa fa-times" title="<?= _e('Remove') ?>"></i>
                                                 </button>
                                             </div>
@@ -164,7 +168,7 @@ if ($sub)
                     "new_pos": newIndex
                 },
                 success: function(response) {
-                    // location.reload();
+                    location.reload();
                 }
             });
         }

@@ -65,6 +65,7 @@ function porto_child_additional_info_based_on_type()
 
         jQuery(".add_to_queue").click(function() {
 
+            jQuery('.alert').remove();
             var product_id = jQuery('input[name="product_id"]').val();
             var variation_id = jQuery('input[name="variation_id"]').val();
             if (variation_id.length != 0) {
@@ -114,14 +115,9 @@ add_action('woocommerce_after_add_to_cart_button', 'added_queue_div');
 
 
 // add to queue submission
-function post_word_count()
+function add_to_queue()
 {
     if (is_user_logged_in()) {
-
-        $currentyear = date("Y");
-        $currentmonth = date("n");
-
-        $user = wp_get_current_user();
 
         $product_id = $_POST['productid'];
         $variation_id = $_POST['variationid'];
@@ -134,7 +130,7 @@ function post_word_count()
         }
 
         $instance = new Custom_Subscription();
-        $queue = $instance->get_queues(true);
+        $queue = end($instance->get_queues());
 
         if (has_term('luxury', 'product_cat', $queue->product_id)) {
             $has_package = 'luxury';
@@ -142,7 +138,7 @@ function post_word_count()
             $has_package = 'regular';
         }
 
-        if ($has_package != $package) {
+        if ($queue && $has_package != $package) {
             return wp_send_json([
                 'status' => false,
                 'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
@@ -159,23 +155,38 @@ function post_word_count()
             ]);
 
         $has_product = $instance->get_queues($product_id, 'product');
-        if (!$has_product) {
-            if ($instance->add_to_queue($product_id, $variation_id))
-                return wp_send_json([
-                    'status' => true,
-                    'message' => 'Your product has been added to the queue'
-                ]);
-
-            return wp_send_json([
-                'status' => false,
-                'message' => 'Something went wrong, please contact support'
-            ]);
-        } else {
+        if ($has_product)
             return wp_send_json([
                 'status' => false,
                 'message' => 'The product is already exists in the queue'
             ]);
+
+        if ($instance->add_to_queue($product_id, $variation_id)) {
+            $sub = $instance->get_subscription();
+            $product = wc_get_product($product_id);
+            $item = $sub->add_product($product, 1, [
+                'total' => $queue ? 0 : $new_variation->price
+            ]);
+            $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
+            $date->modify('+1 month');
+
+            //Add item meta to track the month
+            wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+            $sub->calculate_totals();
+
+            //Update the subscription date
+            $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+
+            return wp_send_json([
+                'status' => true,
+                'message' => 'Your product has been added to the queue'
+            ]);
         }
+
+        return wp_send_json([
+            'status' => false,
+            'message' => 'Something went wrong, please contact support'
+        ]);
     } else {
         return wp_send_json([
             'status' => false,
@@ -184,44 +195,89 @@ function post_word_count()
     }
 }
 
-add_action('wp_ajax_post_word_count', 'post_word_count');
-add_action('wp_ajax_nopriv_post_word_count', 'post_word_count');
+add_action('wp_ajax_post_word_count', 'add_to_queue');
+add_action('wp_ajax_nopriv_post_word_count', 'add_to_queue');
 
 // add to queue submission
 function post_data_del()
 {
-    $prodid = $_POST['productid'];
-    $ctid = $_POST['customerid'];
-    global $wpdb;
+    $item_id = $_POST['productid'];
+    if (!$item_id)
+        return false;
 
-    //delete item
-    $table_perfixed = 'woocommerce_queue_data';
-    $results = $wpdb->get_results("DELETE FROM $table_perfixed
-    WHERE  `id` = $prodid
-    AND `customer_id`=$ctid");
+    $instance = new Custom_Subscription;
+    $queues = $instance->get_queues();
 
-    //resorting
-    $showresults = $wpdb->get_results("SELECT * FROM $table_perfixed
-    WHERE `customer_id`=$ctid
-    AND `status` = 'Active'");
+    //Queue re-arrange
+    $table = 'woocommerce_queue_data'; //Get the table name
+    $query = ''; //Balnk variable for the query
+    $got_place = false;
+    $deletable = null;
+    $date = new DateTime();
+    $from_date = $date;
+    foreach ($queues as $key => $data) {
+        if ($item_id == $data->id) {
+            $got_place = true;
 
-    $dateincrement = 0;
-    foreach ($showresults as $single) {
-        $currentyear = date("Y");
-        $currentmonth = date("n");
-        $newcurrdate = $currentmonth + $dateincrement;
-        $newcurryear = $currentyear;
-        if ($newcurrdate > 12) {
-            $newcurrdate = 1;
-            $newcurryear = $currentyear + 1;
+            $deletable = $data;
+            $date = DateTime::createFromFormat('Y-m', $data->year . '-' . $data->month_id);
+            $from_date = $date;
+        } elseif ($got_place) {
+            //Update queue data placement
+            $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
+            $date->modify('+1 month');
         }
-
-        $updaterow = $wpdb->get_row("
-		 UPDATE $table_perfixed SET `month_id` = $newcurrdate , `year` = $newcurryear WHERE  `id` = $single->id
-	");
-
-        $dateincrement++;
     }
+
+    //Get the subscription data
+    $sub = $instance->get_subscription();
+
+    if (!$sub) {
+        global $wpdb;
+        $wpdb->delete(
+            $table,
+            array(
+                'id' => $deletable->id
+            ),
+            array(
+                '%d'
+            )
+        );
+    } else {
+        $items = $sub->get_items();
+        $has_delivered = $instance->get_delivered_items();
+        $items_to_change = array_diff($items, $has_delivered);
+
+        foreach ($items_to_change as $key => $item) {
+            if ($item->get_product()->get_id() == $deletable->product_id) {
+                global $wpdb;
+                $wpdb->delete(
+                    $table,
+                    array(
+                        'id' => $deletable->id
+                    ),
+                    array(
+                        '%d'
+                    )
+                );
+
+                wc_delete_order_item($item->get_id());
+            }
+
+            $item->update_meta_data('Deliverable Date', $from_date->format('F Y'));
+            $from_date->modify('+1 month');
+        }
+    }
+
+    //Calculate the amounts
+    $sub->calculate_totals();
+
+    //Update the subscription date
+    $sub->update_dates(array('end' => $from_date->modify('last day of this month')->format('Y-m-d H:i:s')));
+
+    //Update the queue
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($query);
 }
 
 add_action('wp_ajax_post_data_del', 'post_data_del');
@@ -294,7 +350,7 @@ function post_data_drag()
     $date = $instance->date;
 
     //Get the subscription data
-    $sub = end(wcs_get_users_subscriptions());
+    $sub = $instance->get_subscription();
 
     if (!$sub) {
         update_queue_only($list, $date);
@@ -492,7 +548,7 @@ function deliver_item()
         ]);
 
     wc_add_order_item_meta($item->get_id(), 'Delivered', 'Yes', true);
-    $sub->add_order_note('Item "' . $item->get_product()->name . '" has been delivered.');
+    $sub->add_order_note('Item "' . $item->get_product()->name . '" for ' . $item->get_meta('Deliverable Date') . ' has been delivered.');
 
     //Return the response
     return wp_send_json([
