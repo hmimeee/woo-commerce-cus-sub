@@ -172,11 +172,20 @@ function add_to_queue()
 
         if ($instance->add_to_queue($product_id, $variation_id)) {
             $sub = $instance->get_subscription();
+            $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
+            $date->modify('+1 month');
 
             if ($sub) {
+                $item_with_price = array_filter(array_map(function ($q) {
+                    if ($q->get_total() == '0')
+                        return null;
+
+                    return $q;
+                }, $sub->get_items()));
+
                 $product = wc_get_product($product_id);
                 $item = $sub->add_product($product, 1, [
-                    'total' => $queue ? 0 : $new_variation->price
+                    'total' => $item_with_price ? 0 : $new_variation->price
                 ]);
 
                 //Add item meta to track the month
@@ -186,8 +195,6 @@ function add_to_queue()
                 //Update the subscription date
                 $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
             }
-            $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
-            $date->modify('+1 month');
 
             return wp_send_json([
                 'status' => true,
@@ -456,7 +463,7 @@ add_action('woocommerce_before_thankyou', 'has_custom_subscription_for_order');
 function has_custom_subscription_for_order()
 {
     $order = wc_get_order(WC()->session->get('subscription_order'));
-    WC()->session->subscription_order = null;
+    // WC()->session->subscription_order = null;
 
     if (!$order)
         return false;
@@ -464,8 +471,11 @@ function has_custom_subscription_for_order()
     $custom = new Custom_Subscription;
     $sub = $custom->create_subscription($order->id);
 
-    if ($sub)
-        return true;
+    //Redirect to the payment page
+    if ($sub) {
+        wp_redirect("/queue");
+        exit;
+    }
 }
 
 /**

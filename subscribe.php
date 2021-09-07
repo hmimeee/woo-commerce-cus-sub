@@ -26,6 +26,11 @@ if ($sub && isset($_GET['upgrade'])) {
 
 $details = $instance->order_details();
 
+if (!$details->billing_address['billing_country'] && !$details->billing_address['billing_state']) {
+    wp_redirect('/my-account/edit-address/billing/');
+    exit;
+}
+
 //Queue first data
 $queue = $instance->get_queues(true);
 

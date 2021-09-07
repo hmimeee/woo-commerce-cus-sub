@@ -205,22 +205,6 @@ class Custom_Subscription
 
     public function update_subscription_items($sub)
     {
-        //Remove subscription items
-        $sub->remove_order_items('line_item');
-        $items = $sub->get_items();
-
-        $items_to_add = [];
-        foreach ($items as $key => $item) {
-            $metas = wcs_get_order_item_meta($item)->get_formatted();
-
-            foreach ($metas as $key => $meta) {
-                if ($meta['key'] == 'Delivered') {
-                    wc_delete_order_item($item);
-                    $items_to_add[] = $item;
-                }
-            }
-        }
-
         // Add product to the subscription
         $queues = $this->get_queues();
         $date = clone $this->date;

@@ -50,8 +50,10 @@ if ($sub)
                                     <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (!empty($queue) && $sub && $sub->get_status() == 'cancelled') : ?>
                                     <a href="/subscribe-intend"><?= _e('Re-subscription') ?></a>
+                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (!empty($queue)) : ?>
                                     <a href="/subscribe-intend"><?= _e('Subscribe') ?></a>
+                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (empty($queue)) : ?>
                                     <a href="/subscribe"><?= _e('Choose Package') ?></a>
                                 <?php endif ?>
