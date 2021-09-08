@@ -143,23 +143,13 @@ class Custom_Subscription
      * @param $product_id Product id to get the category of subscription
      * @return float
      */
-    public function get_amount($product_id): float
+    public function get_amount($queue = null)
     {
-        //Select the package
-        if (has_term('luxury', 'product_cat', $product_id)) {
-            $package = 'luxury';
-        } else {
-            $package = 'regular';
-        }
+        $queue = $queue ?? $this->get_queues(true);
+        $variation = new WC_Product_Variation($queue->variation_id);
+        $price = $variation->price;
 
-        //Get the package amount for the subscription
-        $prices = array(
-            'regular' => 9.99,
-            'luxury' => 14.99
-        );
-        $amount = $prices[$package];
-
-        return floatVal($amount);
+        return 1;
     }
 
     /**
@@ -185,8 +175,27 @@ class Custom_Subscription
             wp_redirect('queue');
 
         //Set the addresses for the subscription
-        $sub->set_address($details->billing_address, 'billing');
-        $sub->set_address($details->shipping_address, 'shipping');
+        $sub->set_billing_first_name($details->billing_address['billing_first_name']);
+        $sub->set_billing_last_name($details->billing_address['billing_last_name']);
+        $sub->set_billing_email($details->billing_address['billing_email']);
+        $sub->set_billing_phone($details->billing_address['billing_phone']);
+        $sub->set_billing_country($details->billing_address['billing_country']);
+        $sub->set_billing_state($details->billing_address['billing_state']);
+        $sub->set_billing_city($details->billing_address['billing_city']);
+        $sub->set_billing_postcode($details->billing_address['billing_postcode']);
+        $sub->set_billing_address_1($details->billing_address['billing_address_1']);
+        $sub->set_billing_address_2($details->billing_address['billing_address_2']);
+        $sub->set_billing_company($details->billing_address['billing_company']);
+
+        $sub->set_shipping_first_name($details->shipping_address['shipping_first_name']);
+        $sub->set_shipping_last_name($details->shipping_address['shipping_last_name']);
+        $sub->set_shipping_country($details->shipping_address['shipping_country']);
+        $sub->set_shipping_state($details->shipping_address['shipping_state']);
+        $sub->set_shipping_city($details->shipping_address['shipping_city']);
+        $sub->set_shipping_postcode($details->shipping_address['shipping_postcode']);
+        $sub->set_shipping_address_1($details->shipping_address['shipping_address_1']);
+        $sub->set_shipping_address_2($details->shipping_address['shipping_address_2']);
+        $sub->set_shipping_company($details->shipping_address['shipping_company']);
 
         //Add items to the subscription
         $this->update_subscription_items($sub);
@@ -211,16 +220,19 @@ class Custom_Subscription
         $count = 0;
         foreach ($queues as $queue) {
             $product = wc_get_product($queue->product_id);
+            $variation = new WC_Product_Variation($queue->variation_id);
 
             //Check if product exist
             if (!$product)
                 continue;
 
             if ($count == 0) {
-                $item = $sub->add_product($product, 1, ['total' => $this->get_amount($queue->product_id), 'month' => $date->format('F Y')]); //Set the product for the subscription with price for first product
+                $item = $sub->add_product($product, 1, ['total' => $this->get_amount($queue), 'month' => $date->format('F Y')]); //Set the product for the subscription with price for first product
+                wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
                 wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
             } else {
                 $item = $sub->add_product($product, 1, ['total' => 0]); //Set the product for the subscription
+                wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
                 wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
             }
 
@@ -230,7 +242,8 @@ class Custom_Subscription
 
         //Update the dates
         $date = clone $this->date;
-        $next_payment = (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s');
+        // $next_payment = (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s');
+        $next_payment = (new DateTime())->modify('+1 day')->format('Y-m-d H:i:s');
         $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
     }

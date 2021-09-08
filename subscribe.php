@@ -35,14 +35,15 @@ if (!$details->billing_address['billing_country'] && !$details->billing_address[
 $queue = $instance->get_queues(true);
 
 //Check if queue is empty
-if (!$queue)
-    wp_redirect('queue');
+if (!$queue) {
+    wp_redirect('/queue');
+    exit;
+}
 
 //Create an order
 $data = array_merge($details->data, $details->billing_address, $details->shipping_address);
 $checkout = new WC_Checkout();
 $order_id = $checkout->create_order($data);
-update_post_meta($order_id, '_customer_user', $instance->user_id);
 
 //Check if order created
 if (!$order_id)
@@ -54,11 +55,14 @@ $order = wc_get_order($order_id);
 //Get the first product object
 $product = wc_get_product($queue->product_id);
 
-//get the amount
-$amount = $instance->get_amount($queue->product_id, $queue->variation_id);
+// //get the amount
+$variation = new WC_Product_Variation($queue->variation_id);
+$amount = $variation->price;
+$amount = 1;
 
 //Add product to the order
 $item = $order->add_product($product, 1, ['total' => $amount]);
+wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
 wc_add_order_item_meta($item, 'Deliverable Date', $details->date->format('F Y'), true);
 
 //Calculate the amounts

@@ -5,6 +5,13 @@
 // ini_set('display_errors', 1);
 
 // echo "<pre>";
+// $prod = wc_get_products([
+//     'numberposts' => 627
+// ]);
+// foreach ($prod as $key => $prd) {
+//     update_post_meta($prd->id, '_wcsatt_schemes', []);
+// }
+// die;
 
 get_header();
 /*

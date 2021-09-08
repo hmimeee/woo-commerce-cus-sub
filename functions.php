@@ -189,6 +189,7 @@ function add_to_queue()
                 ]);
 
                 //Add item meta to track the month
+                wc_add_order_item_meta($item, 'Size', $has_variation->attributes['pa_size']);
                 wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
                 $sub->calculate_totals();
 
@@ -266,6 +267,8 @@ function post_data_del()
         $items = $sub->get_items();
         $has_delivered = $instance->get_delivered_items();
         $items_to_change = array_diff($items, $has_delivered);
+        $queue = $instance->get_queues(true);
+        $variation = new WC_Product_Variation($queue->variation_id);
 
         foreach ($items_to_change as $key => $item) {
             if ($item->get_product()->get_id() == $deletable->product_id) {
@@ -281,8 +284,10 @@ function post_data_del()
                 );
 
                 wc_delete_order_item($item->get_id());
+                continue;
             }
 
+            wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
             $item->update_meta_data('Deliverable Date', $from_date->format('F Y'));
             $from_date->modify('+1 month');
         }
@@ -421,6 +426,7 @@ function post_data_drag()
             ]);
 
         //Add item meta to track the month
+        wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
         wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
 
         //Update queue data placement
@@ -463,7 +469,7 @@ add_action('woocommerce_before_thankyou', 'has_custom_subscription_for_order');
 function has_custom_subscription_for_order()
 {
     $order = wc_get_order(WC()->session->get('subscription_order'));
-    // WC()->session->subscription_order = null;
+    WC()->session->subscription_order = null;
 
     if (!$order)
         return false;
@@ -577,4 +583,130 @@ function deliver_item()
         'status' => true,
         'message' => 'Item delivery status updated successfully'
     ]);
+}
+
+/**
+ * Cart subscription section removing,
+ * as we are using custom subscription feature.
+ */
+add_action('woocommerce_after_cart', 'woocommerce_after_cart_custom');
+function woocommerce_after_cart_custom()
+{
+?>
+    <script>
+        jQuery('table.cart-total th h2').remove();
+        jQuery('table.cart-total th p').remove();
+        jQuery('table.cart-total th .wcsatt-options-cart').remove();
+    </script>
+<?php
+}
+
+add_shortcode('product_reviews', 'customer_review_home');
+function customer_review_home()
+{
+    $reviews = get_comments(array(
+        'number'      => 6,
+        'status'      => 'approve',
+        'post_status' => 'publish',
+        'post_type'   => 'product'
+    ));
+
+?>
+    <div class="container">
+        <div class="row">
+            <?php foreach ($reviews as $review) :
+                $product = wc_get_product($review->comment_post_ID);
+                $name_avatar = name_avatar_gen($review->comment_author);
+                // echo '<pre>';
+                // print_r();
+            ?>
+                <div class="col-md-4">
+                    <div class="ivole-review-card cr-card-product" style="border-color:;background-color:#fbfbfb;" data-reviewid="193250">
+                        <div class="ivole-review-card-content">
+                            <div class="top-row">
+                                <div class="review-thumbnail">
+                                    <?= $name_avatar ?>
+                                </div>
+                                <div class="reviewer">
+                                    <div class="reviewer-name"><?= $review->comment_author ?></div>
+                                    <div class="reviewer-verified"><img class="cr-reviewer-verified" src="https://www.scentsevent.com/wp-content/plugins/customer-reviews-woocommerce/img/verified.svg" alt="Verified owner" width="22" height="22" loading="lazy">Verified owner</div>
+                                </div>
+                            </div>
+                            <div class="rating-row">
+                                <div class="rating">
+                                    <div class="crstar-rating" style="color:#FFD707;"><span style="width:100%;"></span></div>
+                                </div>
+                                <div class="rating-label">5/5</div>
+                            </div>
+                            <div class="middle-row">
+                                <div class="review-content">
+                                    <p><?= $review->comment_content ?></p>
+                                </div>
+                                <div class="verified-review-row">
+                                    <div class="verified-badge">
+                                        <p class="ivole-verified-badge"><img src="https://www.scentsevent.com/wp-content/plugins/customer-reviews-woocommerce/img/shield-20.png" alt="Verified review" class="ivole-verified-badge-icon"><span class="ivole-verified-badge-text">Verified review - <a href="https://www.cusrev.com/reviews/www.scentsevent.com/p/p-113801/r-243290" title="" target="_blank" rel="nofollow noopener">view original</a></span></p>
+                                    </div>
+                                </div>
+                                <div class="datetime"><?= time_elapsed_string($review->comment_date) ?></div>
+                            </div>
+                            <div class="review-product" style="background-color:#f2f2f2;">
+                                <div class="product-thumbnail">
+                                    <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($product->get_id()), 'single-post-thumbnail')) ?>" class="attachment-woocommerce_gallery_thumbnail size-woocommerce_gallery_thumbnail">
+                                </div>
+                                <div class="product-title">
+                                    <a href="/product/<?= $product->slug ?>"><?= $product->get_name() ?></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach ?>
+        </div>
+    </div>
+<?php
+}
+
+function time_elapsed_string($datetime, $full = false)
+{
+    $now = new DateTime;
+    $ago = new DateTime($datetime);
+    $diff = $now->diff($ago);
+
+    if ($ago->format('Y-m-d') == date('Y-m-d'))
+        return 'Today';
+
+    $diff->w = floor($diff->d / 7);
+    $diff->d -= $diff->w * 7;
+
+    $string = array(
+        'y' => 'year',
+        'm' => 'month',
+        'w' => 'week',
+        'd' => 'day',
+        'h' => 'hour',
+        'i' => 'minute',
+        's' => 'second',
+    );
+    foreach ($string as $k => &$v) {
+        if ($diff->$k) {
+            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 ? 's' : '');
+        } else {
+            unset($string[$k]);
+        }
+    }
+
+    if (!$full) $string = array_slice($string, 0, 1);
+    return $string ? implode(', ', $string) . ' ago' : 'just now';
+}
+
+function name_avatar_gen($name)
+{
+    $name_parsed = explode(' ', $name);
+    $name_alp = array_map(function ($n) {
+        return substr($n, 0, 1);
+    }, $name_parsed);
+    $name_image = implode('', $name_alp);
+    $name_avatar = strlen($name_image) == 1 ? substr($name, 0, 2) : $name_image;
+
+    return $name_avatar;
 }
