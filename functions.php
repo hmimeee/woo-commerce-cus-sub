@@ -5,6 +5,8 @@
 
 // echo "<pre>";
 
+use Elementor\Widget_Star_Rating;
+
 require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
 add_action('wp_enqueue_scripts', 'porto_child_css', 1001);
@@ -617,11 +619,11 @@ function customer_review_home()
             <?php foreach ($reviews as $review) :
                 $product = wc_get_product($review->comment_post_ID);
                 $name_avatar = name_avatar_gen($review->comment_author);
+                $rating = reset(get_comment_meta($review->comment_ID)['rating']);
                 // echo '<pre>';
-                // print_r();
             ?>
                 <div class="col-md-4">
-                    <div class="ivole-review-card cr-card-product" style="border-color:;background-color:#fbfbfb;" data-reviewid="193250">
+                    <div class="ivole-review-card cr-card-product">
                         <div class="ivole-review-card-content">
                             <div class="top-row">
                                 <div class="review-thumbnail">
@@ -629,14 +631,17 @@ function customer_review_home()
                                 </div>
                                 <div class="reviewer">
                                     <div class="reviewer-name"><?= $review->comment_author ?></div>
-                                    <div class="reviewer-verified"><img class="cr-reviewer-verified" src="https://www.scentsevent.com/wp-content/plugins/customer-reviews-woocommerce/img/verified.svg" alt="Verified owner" width="22" height="22" loading="lazy">Verified owner</div>
+                                    <div class="reviewer-verified">
+                                        <i class="fa fa-check-circle"></i>
+                                        Verified owner
+                                    </div>
                                 </div>
                             </div>
                             <div class="rating-row">
                                 <div class="rating">
-                                    <div class="crstar-rating" style="color:#FFD707;"><span style="width:100%;"></span></div>
+                                    <?= wc_get_rating_html($rating, 5) ?>
                                 </div>
-                                <div class="rating-label">5/5</div>
+                                <div class="rating-label"><?= $rating ?>/5</div>
                             </div>
                             <div class="middle-row">
                                 <div class="review-content">
@@ -644,12 +649,15 @@ function customer_review_home()
                                 </div>
                                 <div class="verified-review-row">
                                     <div class="verified-badge">
-                                        <p class="ivole-verified-badge"><img src="https://www.scentsevent.com/wp-content/plugins/customer-reviews-woocommerce/img/shield-20.png" alt="Verified review" class="ivole-verified-badge-icon"><span class="ivole-verified-badge-text">Verified review - <a href="https://www.cusrev.com/reviews/www.scentsevent.com/p/p-113801/r-243290" title="" target="_blank" rel="nofollow noopener">view original</a></span></p>
+                                        <p class="ivole-verified-badge">
+                                            <i class="fa fa-shield"></i>
+                                            Verified review - <a href="/product/<?= $product->slug ?>" target="_blank" rel="nofollow noopener">view original</a>
+                                        </p>
                                     </div>
                                 </div>
                                 <div class="datetime"><?= time_elapsed_string($review->comment_date) ?></div>
                             </div>
-                            <div class="review-product" style="background-color:#f2f2f2;">
+                            <div class="review-product">
                                 <div class="product-thumbnail">
                                     <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($product->get_id()), 'single-post-thumbnail')) ?>" class="attachment-woocommerce_gallery_thumbnail size-woocommerce_gallery_thumbnail">
                                 </div>
