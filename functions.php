@@ -5,8 +5,6 @@
 
 // echo "<pre>";
 
-use Elementor\Widget_Star_Rating;
-
 require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 
 add_action('wp_enqueue_scripts', 'porto_child_css', 1001);
@@ -717,4 +715,13 @@ function name_avatar_gen($name)
     $name_avatar = strlen($name_image) == 1 ? substr($name, 0, 2) : $name_image;
 
     return $name_avatar;
+}
+
+add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription');
+function renew_custom_subscription($sub_id)
+{
+    $sub = wcs_get_subscription($sub_id);
+    $stripe = new WC_Stripe_Sepa_Subs_Compat;
+    $stripe->process_subscription_payment($sub->get_total(), $sub);
+    die;
 }

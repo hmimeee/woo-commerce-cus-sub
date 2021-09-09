@@ -196,6 +196,16 @@ class Custom_Subscription
         $sub->set_shipping_address_1($details->shipping_address['shipping_address_1']);
         $sub->set_shipping_address_2($details->shipping_address['shipping_address_2']);
         $sub->set_shipping_company($details->shipping_address['shipping_company']);
+        $sub->set_payment_method('stripe');
+
+        $stripe = new WC_Gateway_Stripe();
+        $parent = $sub->get_parent();
+        $stripe_source = $stripe->get_intent_from_order($parent)->source;
+        $stripe_customer = $stripe->get_stripe_customer_id($parent);
+
+        update_post_meta($sub->get_id(), '_requires_manual_renewal', false);
+        update_post_meta($sub->get_id(), '_stripe_source_id', $stripe_source);
+        update_post_meta($sub->get_id(), '_stripe_customer_id', $stripe_customer);
 
         //Add items to the subscription
         $this->update_subscription_items($sub);
@@ -243,7 +253,7 @@ class Custom_Subscription
         //Update the dates
         $date = clone $this->date;
         // $next_payment = (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s');
-        $next_payment = (new DateTime())->modify('+1 day')->format('Y-m-d H:i:s');
+        $next_payment = (new DateTime())->modify('+1 hour')->format('Y-m-d H:i:s');
         $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
     }
