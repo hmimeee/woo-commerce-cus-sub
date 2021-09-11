@@ -252,8 +252,7 @@ class Custom_Subscription
 
         //Update the dates
         $date = clone $this->date;
-        // $next_payment = (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s');
-        $next_payment = (new DateTime())->modify('+1 hour')->format('Y-m-d H:i:s');
+        $next_payment = (new DateTime())->modify('+1 day')->format('Y-m-d H:i:s');
         $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
     }
