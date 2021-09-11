@@ -26,9 +26,9 @@ $items = [];
 if ($sub)
     $items = array_values($sub->get_items());
 
-    $sub->update_dates([
-        'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
-    ]);
+    // $sub->update_dates([
+    //     'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
+    // ]);
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
@@ -50,7 +50,7 @@ if ($sub)
                                 <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
                                     <a href="/unsubscribe-intend"><?= _e('Cancel Subscription') ?></a>
                                     <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
-                                <?php elseif (!empty($queue) && $sub && $sub->get_status() == 'cancelled' || $sub->get_status() == 'on-hold') : ?>
+                                <?php elseif (!empty($queue) && $sub && ($sub->get_status() == 'cancelled' || $sub->get_status() == 'on-hold')) : ?>
                                     <a href="/subscribe-intend"><?= _e('Re-subscription') ?></a>
                                     <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (!empty($queue)) : ?>

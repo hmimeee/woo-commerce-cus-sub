@@ -717,7 +717,7 @@ function name_avatar_gen($name)
     return $name_avatar;
 }
 
-add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription');
+add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 1);
 function renew_custom_subscription($sub_id)
 {
     $sub = wcs_get_subscription($sub_id);

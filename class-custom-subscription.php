@@ -167,7 +167,8 @@ class Custom_Subscription
             'order_id' => $order_id,
             'status' => 'pending', // Status should be initially set to pending
             'billing_period' => 'month',
-            'billing_interval' => 1
+            'billing_interval' => 1,
+            'requires_manual_renewal' => 'false'
         ));
 
         //Check if subscription created
@@ -252,9 +253,8 @@ class Custom_Subscription
 
         //Update the dates
         $date = clone $this->date;
-        $next_payment = (new DateTime())->modify('+1 day')->format('Y-m-d H:i:s');
         $end_date = ((clone $date)->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
-        $sub->update_dates(array('next_payment' => $next_payment,  'end' => $end_date));
+        $sub->update_dates(array('end' => $end_date)); 
     }
 
     /**
