@@ -17,6 +17,9 @@ if ($sub && isset($_GET['upgrade'])) {
     wp_redirect("/subscribe");
     exit;
 } elseif ($sub) {
+
+    // $stripe = new WC_Stripe_Sepa_Subs_Compat;
+	// $stripe->scheduled_subscription_payment($sub->get_total(), $sub);
     $instance->update_subscription('active');
 
     //Redirect to the payment page
@@ -58,6 +61,7 @@ $product = wc_get_product($queue->product_id);
 // //get the amount
 $variation = new WC_Product_Variation($queue->variation_id);
 $amount = $variation->price;
+//Temporary code
 $amount = 1;
 
 //Add product to the order

@@ -307,26 +307,6 @@ function post_data_del()
 add_action('wp_ajax_post_data_del', 'post_data_del');
 add_action('wp_ajax_nopriv_post_data_del', 'post_data_del');
 
-function update_queue_only($list, $date)
-{
-    //Queue data parsing
-    global $wpdb;
-    $table = 'woocommerce_queue_data';
-
-    $query = '';
-    foreach ($list as $key => $data) {
-        //Update queue data placement
-        $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
-        $date->modify('+1 month');
-    }
-
-    //Update the queue
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($query);
-
-    return true;
-}
-
 
 //dragable effect for queue change
 function post_data_drag()
@@ -377,7 +357,7 @@ function post_data_drag()
     $sub = $instance->get_subscription();
 
     if (!$sub) {
-        update_queue_only($list, $date);
+        $instance->update_queue_only($list);
 
         //Return the response
         return wp_send_json([
@@ -386,69 +366,7 @@ function post_data_drag()
         ]);
     }
 
-    //Get the items
-    $items = $sub->get_items();
-
-    $items_to_keep = []; //Empty array for the delivered items
-    foreach ($items as $key => $item) {
-
-        //Check if the item has been delivered, then add it to the keep list. Also update the date.
-        if ($item->get_meta('Delivered')) {
-            $items_to_keep[] = $item->get_product_id();
-            $date->modify('+1 month');
-            continue;
-        }
-
-        //Delete the item from the subscription
-        wc_delete_order_item($item->get_id());
-    }
-
-    $table = 'woocommerce_queue_data'; //Get the table name
-    $query = ''; //Balnk variable for the query
-    foreach ($list as $key => $data) {
-
-        //Check if the item has been delivered, then skip it
-        if (in_array($data->product_id, $items_to_keep))
-            continue;
-
-        $product = wc_get_product($data->product_id); //Get the product object
-        $variation = new WC_Product_Variation($data->variation_id); //Get the variation object
-        $price = $variation->price; //Get the amount of the variation
-
-        //Add amount if the item is first one, else 0 amount
-        if ($key == 0 && count($items_to_keep) == 0)
-            $item = $sub->add_product($product, 1, [
-                'total' => $price
-            ]);
-        else
-            $item = $sub->add_product($product, 1, [
-                'total' => 0
-            ]);
-
-        //Add item meta to track the month
-        wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-        wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
-
-        //Update queue data placement
-        $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
-
-        //Check if the list has end
-        if (end($list) != $data)
-            $date->modify('+1 month');
-    }
-
-    //Get the subscription data
-    $sub = reset(wcs_get_users_subscriptions());
-
-    //Calculate the amounts
-    $sub->calculate_totals();
-
-    //Update the subscription date
-    $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
-
-    //Update the queue
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($query);
+    $instance->update_items($sub, $list);
 
     //Return the response
     return wp_send_json([
@@ -479,6 +397,11 @@ function has_custom_subscription_for_order()
 
     //Redirect to the payment page
     if ($sub) {
+        $sub = wcs_get_subscription($sub->get_id());
+        $sub->update_dates([
+            'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
+        ]);
+
         wp_redirect("/queue");
         exit;
     }
@@ -512,7 +435,8 @@ function hide_monthly_queue()
     ";
 }
 
-function item_delivery_status($post)
+add_action('add_meta_boxes',  'item_delivery_status');
+function item_delivery_status()
 {
     add_meta_box(
         'wc_subscription_item_delivery', // Unique ID
@@ -521,21 +445,26 @@ function item_delivery_status($post)
         'shop_subscription', // Post type
     );
 }
-add_action('add_meta_boxes',  'item_delivery_status');
 
-function wc_subscription_item_delivery_html($post)
+function wc_subscription_item_delivery_html()
 {
     $sub = wcs_get_subscription(get_the_ID());
+    if ($sub && count($sub->get_items()))
+        $items = [];
+
+    $items = $sub->get_items();
 ?>
-    <?php wp_nonce_field() ?>
-    <select name="item_id" id="item_id" class="postbox">
+    <select id="item_id" class="postbox">
         <option value="">Select item</option>
         <?php foreach ($sub->get_items() as $key => $item) : ?>
-            <?php if ($item->get_meta('Delivered')) continue; ?>
+            <?php
+            if ($item->get_meta('Delivered')) continue;
+            if (!$item->get_product()) continue;
+            ?>
             <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?></option>
         <?php endforeach ?>
     </select>
-    <button type="button" id="deliver_item" class="button">Set Delivered</button>
+    <a href="javascript:;" id="deliver_item" class="button">Set Delivered</a>
 
     <script>
         jQuery('#deliver_item').click(function(e) {
@@ -669,7 +598,7 @@ function customer_review_home()
             <?php endforeach ?>
         </div>
     </div>
-<?php
+    <?php
 }
 
 function time_elapsed_string($datetime, $full = false)
@@ -717,11 +646,30 @@ function name_avatar_gen($name)
     return $name_avatar;
 }
 
-add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 1);
+add_action('woocommerce_pay_order_before_submit', 'force_save_information_for_subscription');
+function force_save_information_for_subscription()
+{
+    if (WC()->session->subscription_order) {
+    ?>
+        <script>
+            save = jQuery('#wc-stripe-new-payment-method');
+            save.parent().html('<input type="hidden" id="wc-stripe-new-payment-method" name="wc-stripe-new-payment-method" value="true"/>');
+        </script>
+<?php
+    }
+}
+
+//For recurring custom subscription
+add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 0, 1);
 function renew_custom_subscription($sub_id)
 {
     $sub = wcs_get_subscription($sub_id);
     $stripe = new WC_Stripe_Sepa_Subs_Compat;
     $stripe->process_subscription_payment($sub->get_total(), $sub);
-    die;
+
+    $sub->update_dates([
+        'next_payment' => date_create()->modify('+1 month')->modify('first day of this month')->format('Y-m-d H:i:s')
+    ]);
+
+    return true;
 }

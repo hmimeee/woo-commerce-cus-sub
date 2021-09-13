@@ -14,7 +14,7 @@ if (!$sub) {
     exit;
 }
 
-$sub->update_status('cancelled');
+$sub->update_status('on-hold');
 
 wp_redirect('/queue');
 exit;

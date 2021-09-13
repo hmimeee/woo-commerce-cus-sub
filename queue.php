@@ -25,10 +25,6 @@ $sub = $instance->get_subscription();
 $items = [];
 if ($sub)
     $items = array_values($sub->get_items());
-
-    // $sub->update_dates([
-    //     'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
-    // ]);
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
