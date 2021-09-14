@@ -211,10 +211,7 @@ class Custom_Subscription
         $sub->calculate_totals();
 
         //Status update
-        // $sub->update_status('active');
-
-        //Activate the subscription
-        WC_Subscriptions_Manager::activate_subscriptions_for_order($order_id);
+        $sub->update_status('active');
 
         return $sub;
     }

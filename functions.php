@@ -660,12 +660,12 @@ function force_save_information_for_subscription()
 }
 
 //For recurring custom subscription
-add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 0, 1);
+add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 1, 1);
 function renew_custom_subscription($sub_id)
 {
     $sub = wcs_get_subscription($sub_id);
     $stripe = new WC_Stripe_Sepa_Subs_Compat;
-    $stripe->process_subscription_payment($sub->get_total(), $sub);
+    $stripe->process_subscription_payment($sub->get_total(), $sub, false);
 
     $sub->update_dates([
         'next_payment' => date_create()->modify('+1 month')->modify('first day of this month')->format('Y-m-d H:i:s')
