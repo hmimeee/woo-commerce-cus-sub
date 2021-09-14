@@ -45,16 +45,18 @@ if ($sub)
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
                                     <a href="/unsubscribe-intend"><?= _e('Cancel Subscription') ?></a>
-                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (!empty($queue) && $sub && ($sub->get_status() == 'cancelled' || $sub->get_status() == 'on-hold')) : ?>
                                     <a href="/subscribe-intend"><?= _e('Re-subscription') ?></a>
-                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (!empty($queue)) : ?>
                                     <a href="/subscribe-intend"><?= _e('Subscribe') ?></a>
-                                    <a href="/subscribe-intend?upgrade=yes"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php elseif (empty($queue)) : ?>
                                     <a href="/subscribe"><?= _e('Choose Package') ?></a>
                                 <?php endif ?>
+                                <?php if (!empty($queue) && $sub) : ?>
+                                    <a href="javascript:;" id="upgrade"><?= _e('Upgrade/Downgrade') ?></a>
+                                <?php endif ?>
+                                <div class="form-group">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -129,7 +131,6 @@ if ($sub)
                                         </div>
                                     </div>
                                 </div>
-
                             <?php
                                 $date->modify('+1 month');
                             endforeach
@@ -145,6 +146,67 @@ if ($sub)
 <script src="//code.jquery.com/jquery-1.12.4.js"></script>
 <script src="//code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 <script>
+    $('#upgrade').click(function() {
+        $btn = $(this);
+        $btn.append(' <i class="fa fa-circle-notch fa-spin"></i>');
+        $.ajax({
+            url: '/wp-admin/admin-ajax.php',
+            type: 'post',
+            data: {
+                'action': 'upgrade_subscription',
+                '_wpnonce': '<?= wp_create_nonce() ?>'
+            },
+            success: function(res) {
+                if (res.success) {
+                    $btn.hide();
+                    $select = '<select id="variation" style="padding:10px 90px;">';
+                    for (let i = 0; i < res.data.length; i++) {
+                        const variant = res.data[i];
+                        $select += '<option value="' + variant.size + '" ' + variant.selected + '>' + variant.size + ' (' + variant.price + '$)</option>';
+                    }
+                    $select += '</select>';
+
+                    if (res.data.length) {
+                        $btn.next('div.form-group').html($select);
+                        $btn.next('div.form-group').append('<button id="confirm-upgrade" class="m-2">Confirm</button>');
+                        $btn.next('div.form-group').append('<button id="cancel-upgrade" class="btn-secondary active">Cancel</button>');
+                        $btn.next('div.form-group').append('<p class="text-left"><b>Note:</b> To change the subscription product category, you need to cancel current subscription and make a new queue.');
+                    }
+                }
+            }
+        })
+    });
+
+    $('body').on('click', '#cancel-upgrade', function() {
+        $can = $(this);
+        $upgrade = $can.parents().find('#upgrade');
+        $upgrade.html('Upgrade/Downgrade');
+        $upgrade.show();
+        $can.parent().html('');
+    });
+
+    $('body').on('click', '#confirm-upgrade', function() {
+        $btn = $(this);
+        $btn.addClass('w-75');
+        $('#cancel-upgrade').remove();
+        $btn.html('Updating <i class="fa fa-cog fa-spin"></i>');
+        $.ajax({
+            url: '/wp-admin/admin-ajax.php',
+            type: 'post',
+            data: {
+                'action': 'upgrade_subscription_confirm',
+                '_wpnonce': '<?= wp_create_nonce() ?>',
+                'size': $('body').find('#variation').val(),
+            },
+            success: function(res) {
+                if (res.success) {
+                    $btn.parent().prepend('<p class="alert alert-success">' + res.data + '</a>');
+                    // location.reload();
+                }
+            }
+        });
+    });
+
     $("#sortable").sortable({
         start: function(e, ui) {
             $(this).attr('data-previndex', ui.item.index());

@@ -673,3 +673,76 @@ function renew_custom_subscription($sub_id)
 
     return true;
 }
+
+add_action('wp_ajax_upgrade_subscription', 'upgrade_custom_subscription');
+add_action('wp_ajax_nopriv_upgrade_subscription', 'upgrade_custom_subscription');
+function upgrade_custom_subscription()
+{
+    $instance = new Custom_Subscription;
+    $sub = $instance->get_subscription();
+    $queue = end($instance->get_queues());
+
+    if (!$sub || !$queue)
+        wp_send_json_error('No active subscription or empty queue');
+
+    $items = $sub->get_items();
+    $product = reset($items)->get_product();
+    $has_var = new WC_Product_Variation($queue->variation_id);
+
+    $variations = array_map(function ($v) use ($has_var) {
+        $var = $v['attributes']['attribute_type'] == 'Subscription' ? $v : null;
+
+        if ($var)
+            $var = [
+                'size' => $var['attributes']['attribute_pa_size'],
+                'price' => $var['display_price'],
+                'selected' => $has_var->attributes['pa_size'] == $var['attributes']['attribute_pa_size'] ? 'selected' : '',
+            ];
+
+        return $var;
+    }, $product->get_available_variations());
+    $variations = array_filter($variations);
+    $variations = array_values($variations);
+
+    wp_send_json_success(array_values($variations));
+}
+
+add_action('wp_ajax_upgrade_subscription_confirm', 'upgrade_custom_subscription_confirm');
+add_action('wp_ajax_nopriv_upgrade_subscription_confirm', 'upgrade_custom_subscription_confirm');
+function upgrade_custom_subscription_confirm()
+{
+    $instance = new Custom_Subscription;
+    $sub = $instance->get_subscription();
+    $queues = $instance->get_queues();
+    $size = $_POST['size'];
+
+    global $wpdb;
+    $table = 'woocommerce_queue_data';
+
+    $items = $sub->get_items();
+    foreach ($items as $key => $item) {
+        $product = $item->get_product();
+        $variations = array_map(function ($var) use ($size) {
+            return $var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription' ? $var : null;
+        }, $product->get_available_variations());
+        $variation = reset(array_filter($variations));
+
+        // if ($key == 0)
+        // $item->set_total('100');
+            // wc_update_order_item($item->get_id(), [
+            //     'total' => $variation['display_price']
+            // ]);
+
+        wc_update_order_item_meta($item->get_id(), 'Size', $variation['attributes']['attribute_pa_size']);
+
+        $wpdb->update($table, [
+            'variation_id' => $variation['variation_id'],
+        ], [
+            'product_id' => $product->get_id(),
+            'customer_id' => get_current_user_id(),
+            'status' => 'Active',
+        ]);
+
+        wp_send_json_success('Upgration successfull');
+    }
+}
