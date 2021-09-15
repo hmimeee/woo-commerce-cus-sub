@@ -664,8 +664,8 @@ add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscript
 function renew_custom_subscription($sub_id)
 {
     $sub = wcs_get_subscription($sub_id);
-    $stripe = new WC_Stripe_Sepa_Subs_Compat;
-    $stripe->process_subscription_payment($sub->get_total(), $sub, false);
+    $instance = new Custom_Subscription;
+    $instance->make_charge($sub);
 
     $sub->update_dates([
         'next_payment' => date_create()->modify('+1 month')->modify('first day of this month')->format('Y-m-d H:i:s')
@@ -720,18 +720,23 @@ function upgrade_custom_subscription_confirm()
     $table = 'woocommerce_queue_data';
 
     $items = $sub->get_items();
+    $first = reset($items);
+    $take = [];
     foreach ($items as $key => $item) {
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
-            return $var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription' ? $var : null;
+            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription')
+                return $var;
+
+            return null;
         }, $product->get_available_variations());
         $variation = reset(array_filter($variations));
+        $take[] = $variation;
 
-        // if ($key == 0)
-        // $item->set_total('100');
-            // wc_update_order_item($item->get_id(), [
-            //     'total' => $variation['display_price']
-            // ]);
+        if ($first == $item) {
+            $item->set_total($variation['display_price']);
+            $item->save();
+        }
 
         wc_update_order_item_meta($item->get_id(), 'Size', $variation['attributes']['attribute_pa_size']);
 
@@ -742,7 +747,7 @@ function upgrade_custom_subscription_confirm()
             'customer_id' => get_current_user_id(),
             'status' => 'Active',
         ]);
-
-        wp_send_json_success('Upgration successfull');
     }
+
+    wp_send_json_success('Upgration successfull');
 }

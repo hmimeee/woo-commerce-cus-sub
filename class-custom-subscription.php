@@ -474,4 +474,31 @@ class Custom_Subscription
 
         return true;
     }
+
+    public function make_charge($sub)
+    {
+        $stripe = new WC_Stripe_Sepa_Subs_Compat;
+
+        // Get source from order
+        $prepared_source = $stripe->prepare_order_source($sub);
+        add_filter('wc_stripe_idempotency_key', [$this, 'change_idempotency_key'], 10, 2);
+
+        $request            = $stripe->generate_payment_request($sub, $prepared_source);
+        $request['capture'] = 'true';
+        $request['amount']  = WC_Stripe_Helper::get_stripe_amount($sub->get_total(), $request['currency']);
+        $response           = WC_Stripe_API::request($request);
+
+        if (empty($response->error)) {
+            do_action('wc_gateway_stripe_process_payment', $response, $sub);
+            $stripe->process_response($response, $sub);
+        }
+    }
+
+    public function change_idempotency_key($idempotency_key, $request)
+    {
+        $customer = ! empty( $request['customer'] ) ? $request['customer'] : '';
+        $source   = ! empty( $request['source'] ) ? $request['source'] : $customer;
+
+        return $request['metadata']['order_id'] . '-' . date('Ymd') . '-' . $source;
+    }
 }
