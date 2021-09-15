@@ -201,7 +201,7 @@ if ($sub)
             success: function(res) {
                 if (res.success) {
                     $btn.parent().prepend('<p class="alert alert-success">' + res.data + '</a>');
-                    // location.reload();
+                    location.reload();
                 }
             }
         });
