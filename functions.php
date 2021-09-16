@@ -196,7 +196,7 @@ function add_to_queue()
                 $sub->calculate_totals();
 
                 //Update the subscription date
-                $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+                $sub->update_dates(array('end' => $date->format('Y-m-d H:i:s')));
             }
 
             return wp_send_json([
@@ -463,7 +463,7 @@ function wc_subscription_item_delivery_html()
             if ($item->get_meta('Delivered')) continue;
             if (!$item->get_product()) continue;
             ?>
-            <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?></option>
+            <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?> (<?= $item->get_meta('Deliverable Date') ?>)</option>
         <?php endforeach ?>
     </select>
     <a href="javascript:;" id="deliver_item" class="button">Set Delivered</a>
