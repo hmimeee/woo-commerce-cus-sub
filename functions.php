@@ -163,17 +163,19 @@ function add_to_queue()
                 'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
             ]);
 
-        $has_product = $instance->get_queues($product_id, 'product');
-        if ($has_product)
-            return wp_send_json([
-                'status' => false,
-                'message' => 'The product is already exists in the queue'
-            ]);
+        // $has_product = $instance->get_queues($product_id, 'product');
+        // if ($has_product)
+        //     return wp_send_json([
+        //         'status' => false,
+        //         'message' => 'The product is already exists in the queue'
+        //     ]);
 
         if ($instance->add_to_queue($product_id, $variation_id)) {
             $sub = $instance->get_subscription();
             $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
-            $date->modify('+1 month');
+
+            if ($queue)
+                $date->modify('+1 month');
 
             if ($sub) {
                 $item_with_price = array_filter(array_map(function ($q) {
@@ -271,7 +273,10 @@ function post_data_del()
         $variation = new WC_Product_Variation($queue->variation_id);
 
         foreach ($items_to_change as $key => $item) {
-            if ($item->get_product()->get_id() == $deletable->product_id) {
+            $delivery = DateTime::createFromFormat('Y-m', $deletable->year . '-' . $deletable->month_id);
+            $product_id = intval($deletable->product_id);
+
+            if ($item->get_product()->get_id() == $product_id && $item->get_meta('Deliverable Date') == $delivery->format('F Y')) {
                 global $wpdb;
                 $wpdb->delete(
                     $table,
@@ -398,9 +403,6 @@ function has_custom_subscription_for_order()
     //Redirect to the payment page
     if ($sub) {
         $sub = wcs_get_subscription($sub->get_id());
-        $sub->update_dates([
-            'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
-        ]);
 
         wp_redirect("/queue");
         exit;
@@ -660,18 +662,26 @@ function force_save_information_for_subscription()
 }
 
 //For recurring custom subscription
-add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 1, 1);
+add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 0, 1);
 function renew_custom_subscription($sub_id)
+{
+    $sub = wcs_get_subscription($sub_id);
+    wc_schedule_single_action(date('Y-m-d H:i:s'), 'renew_custom_subscription_confirm', [
+        'subscription_id' => $sub->get_id()
+    ]);
+}
+
+add_action('renew_custom_subscription_confirm', 'renew_custom_subscription_confirm');
+function renew_custom_subscription_confirm($sub_id)
 {
     $sub = wcs_get_subscription($sub_id);
     $instance = new Custom_Subscription;
     $instance->make_charge($sub);
-
+    $date = date_create()->modify('+1 month');
+    
     $sub->update_dates([
-        'next_payment' => date_create()->modify('+1 month')->modify('first day of this month')->format('Y-m-d H:i:s')
+        'next_payment' => $date->format('Y-m-d H:i:s')
     ]);
-
-    return true;
 }
 
 add_action('wp_ajax_upgrade_subscription', 'upgrade_custom_subscription');
@@ -719,10 +729,20 @@ function upgrade_custom_subscription_confirm()
     global $wpdb;
     $table = 'woocommerce_queue_data';
 
-    $items = $sub->get_items();
-    $first = reset($items);
-    $take = [];
-    foreach ($items as $key => $item) {
+    $items_not_delivered = array_map(function ($itm) {
+        return $itm->get_meta('Delivered') ? null : $itm;
+    }, $sub->get_items());
+
+    $items_not_delivered = array_filter($items_not_delivered);
+    $first = reset($items_not_delivered);
+
+    foreach ($sub->get_items() as $key => $item) {
+        if ($item->get_meta('Delivered')) {
+            $item->set_total(0);
+            $item->save();
+            continue;
+        }
+
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
             if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription')
@@ -731,10 +751,12 @@ function upgrade_custom_subscription_confirm()
             return null;
         }, $product->get_available_variations());
         $variation = reset(array_filter($variations));
-        $take[] = $variation;
 
         if ($first == $item) {
             $item->set_total($variation['display_price']);
+            $item->save();
+        } else {
+            $item->set_total(0);
             $item->save();
         }
 
@@ -748,6 +770,9 @@ function upgrade_custom_subscription_confirm()
             'status' => 'Active',
         ]);
     }
+
+    //Calculate the amounts
+    $sub->calculate_totals();
 
     wp_send_json_success('Upgration successfull');
 }

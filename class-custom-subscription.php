@@ -10,7 +10,7 @@ class Custom_Subscription
         $this->user = get_user_by('ID', $this->user_id);
 
         //Date object
-        $this->date = (new DateTime())->modify('first day of this month');
+        $this->date = new DateTime();
     }
 
 
@@ -118,10 +118,11 @@ class Custom_Subscription
                 ORDER BY year $order, month_id $order";
         }
 
+        $result = $wpdb->get_results($query);
         if ($single)
-            return $wpdb->get_row($query);
+            return end($result);
 
-        return $wpdb->get_results($query);
+        return $result;
     }
 
     public function empty_queue()
@@ -149,8 +150,7 @@ class Custom_Subscription
         $variation = new WC_Product_Variation($queue->variation_id);
         $price = $variation->price;
 
-        //Temporary code
-        return 1;
+        return $price;
     }
 
     /**
@@ -271,7 +271,13 @@ class Custom_Subscription
     {
         $user = $user ?? wp_get_current_user();
         $sub_array = wcs_get_users_subscriptions($user->ID);
-        $sub = end($sub_array);
+        $sub_array = array_map(function ($sub) {
+            return in_array($sub->get_status(), ['cancelled', 'pending-cancel']) ? null : $sub;
+        }, $sub_array);
+        $sub = array_filter($sub_array);
+
+        if (!empty($sub))
+            $sub = end($sub);
 
         return $sub;
     }
@@ -408,25 +414,30 @@ class Custom_Subscription
 
         $table = 'woocommerce_queue_data'; //Get the table name
         $query = ''; //Balnk variable for the query
+        $add_price = false;
         foreach ($list as $key => $data) {
 
             //Check if the item has been delivered, then skip it
-            if (in_array($data->product_id, $items_to_keep))
+            if (in_array($data->product_id, $items_to_keep)) {
+                $add_price = true;
                 continue;
+            }
 
             $product = wc_get_product($data->product_id); //Get the product object
             $variation = new WC_Product_Variation($data->variation_id); //Get the variation object
             $price = $variation->price; //Get the amount of the variation
 
             //Add amount if the item is first one, else 0 amount
-            if ($key == 0 && count($items_to_keep) == 0)
+            if ($add_price) {
                 $item = $sub->add_product($product, 1, [
                     'total' => $price
                 ]);
-            else
+                $add_price = false;
+            } else {
                 $item = $sub->add_product($product, 1, [
                     'total' => 0
                 ]);
+            }
 
             //Add item meta to track the month
             wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
@@ -496,8 +507,8 @@ class Custom_Subscription
 
     public function change_idempotency_key($idempotency_key, $request)
     {
-        $customer = ! empty( $request['customer'] ) ? $request['customer'] : '';
-        $source   = ! empty( $request['source'] ) ? $request['source'] : $customer;
+        $customer = !empty($request['customer']) ? $request['customer'] : '';
+        $source   = !empty($request['source']) ? $request['source'] : $customer;
 
         return $request['metadata']['order_id'] . '-' . date('Ymd') . '-' . $source;
     }

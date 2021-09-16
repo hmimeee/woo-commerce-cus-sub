@@ -61,8 +61,6 @@ $product = wc_get_product($queue->product_id);
 // //get the amount
 $variation = new WC_Product_Variation($queue->variation_id);
 $amount = $variation->price;
-//Temporary code
-$amount = 1;
 
 //Add product to the order
 $item = $order->add_product($product, 1, ['total' => $amount]);
