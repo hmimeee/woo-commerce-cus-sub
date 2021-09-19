@@ -16,7 +16,7 @@ if (is_user_logged_in()) {
 }
 
 $instance = new Custom_Subscription();
-$queue = $instance->get_queues(true);
+$queue = reset($instance->get_queues());
 $date = DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id);
 
 $queues = $instance->get_queues();

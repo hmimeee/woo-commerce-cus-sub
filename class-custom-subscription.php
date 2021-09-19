@@ -477,9 +477,7 @@ class Custom_Subscription
             //Update queue data placement
             $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
 
-            //Check if the list has end
-            if (end($list) != $data)
-                $date->modify('+1 month');
+            $date->modify('+1 month');
         }
 
         //Update the queue
