@@ -16,8 +16,9 @@ if (is_user_logged_in()) {
 }
 
 $instance = new Custom_Subscription();
-$queue = reset($instance->get_queues());
-$date = DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id);
+$queues = $instance->get_queues();
+$queue = count($queues) ? reset($instance->get_queues()) : null;
+$date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : null;
 
 $queues = $instance->get_queues();
 
@@ -227,8 +228,9 @@ if ($sub)
                     "old_pos": oldIndex,
                     "new_pos": newIndex
                 },
-                success: function(response) {
-                    location.reload();
+                success: function(res) {
+                    if (res.status)
+                        location.reload();
                 }
             });
         }
@@ -252,7 +254,8 @@ if ($sub)
                 "customerid": c
             },
             success: function(response) {
-                location.reload();
+                if (response.status)
+                    location.reload();
             }
         });
     });

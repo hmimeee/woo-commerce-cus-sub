@@ -6,8 +6,9 @@
 // echo "<pre>";
 
 require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
+require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-add_action('wp_enqueue_scripts', 'porto_child_css', 1001);
+add_action('wp_enqueue_scripts', 'porto_child_css', 10);
 
 // Load CSS
 function porto_child_css()
@@ -224,26 +225,24 @@ function post_data_del()
     if (!$item_id)
         return false;
 
+
     $instance = new Custom_Subscription;
     $queues = $instance->get_queues();
 
     //Queue re-arrange
+    global $wpdb;
     $table = 'woocommerce_queue_data'; //Get the table name
     $query = ''; //Balnk variable for the query
-    $got_place = false;
     $deletable = null;
     $date = new DateTime();
     $from_date = $date;
-    foreach ($queues as $key => $data) {
+    foreach ($queues as $data) {
         if ($item_id == $data->id) {
-            $got_place = true;
-
             $deletable = $data;
-            $date = DateTime::createFromFormat('Y-m', $data->year . '-' . $data->month_id);
-            $from_date = $date;
-        } elseif ($got_place) {
-            //Update queue data placement
-            $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
+            $from_date = DateTime::createFromFormat('Y-n', $data->year . '-' . $data->month_id);
+        } elseif ($deletable) {
+            //Update queue data placing
+            $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id = $data->id;";
             $date->modify('+1 month');
         }
     }
@@ -252,7 +251,6 @@ function post_data_del()
     $sub = $instance->get_subscription();
 
     if (!$sub) {
-        global $wpdb;
         $wpdb->delete(
             $table,
             array(
@@ -269,12 +267,13 @@ function post_data_del()
         $queue = $instance->get_queues(true);
         $variation = new WC_Product_Variation($queue->variation_id);
 
-        foreach ($items_to_change as $key => $item) {
-            $delivery = DateTime::createFromFormat('Y-m', $deletable->year . '-' . $deletable->month_id);
+        $date = count($items_to_change) ? DateTime::createFromFormat('F Y', reset($items_to_change)->get_meta('Deliverable Date')) : new DateTime();
+        foreach ($items_to_change as $item) {
+            $delivery = DateTime::createFromFormat('Y-n', $deletable->year . '-' . $deletable->month_id);
             $product_id = intval($deletable->product_id);
 
             if ($item->get_product()->get_id() == $product_id && $item->get_meta('Deliverable Date') == $delivery->format('F Y')) {
-                global $wpdb;
+
                 $wpdb->delete(
                     $table,
                     array(
@@ -290,22 +289,28 @@ function post_data_del()
             }
 
             wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-            $item->update_meta_data('Deliverable Date', $from_date->format('F Y'));
+            $item->update_meta_data('Deliverable Date', $date->format('F Y'));
 
             if (end($items_to_change) != $item)
-                $from_date->modify('+1 month');
+                $date->modify('+1 month');
         }
 
-        //Calculate the amounts
-        $sub->calculate_totals();
+        if (!empty($items_to_change)) {
+            //Calculate the amounts
+            $sub->calculate_totals();
 
-        //Update the subscription date
-        $sub->update_dates(array('end' => $from_date->modify('last day of this month')->format('Y-m-d H:i:s')));
+            //Update the subscription date
+            $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+        }
     }
 
     //Update the queue
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($query);
+
+    return wp_send_json([
+        'status' => true,
+        'message' => 'Queue data deleted successfully'
+    ]);
 }
 
 add_action('wp_ajax_post_data_del', 'post_data_del');

@@ -101,16 +101,19 @@ class Custom_Subscription
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
                 AND  `product_id` IN ($single)
-                AND `status` = 'Active'";
+                AND `status` = 'Active'
+                ORDER BY year ASC, month_id ASC";
         } elseif (is_numeric($single) && $order == 'product') {
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
                 AND `product_id` = $single
-                AND `status` = 'Active'";
+                AND `status` = 'Active'
+                ORDER BY year ASC, month_id ASC";
         } elseif ($order == 'row') {
             $query = "SELECT * FROM $table 
             WHERE  `customer_id` = $this->user_id
-            AND  `id` = $single";
+            AND  `id` = $single
+            ORDER BY year ASC, month_id ASC";
         } else {
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
