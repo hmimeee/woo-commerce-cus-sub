@@ -476,7 +476,10 @@ class Custom_Subscription
         foreach ($list as $key => $data) {
             //Update queue data placement
             $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
-            $date->modify('+1 month');
+
+            //Check if the list has end
+            if (end($list) != $data)
+                $date->modify('+1 month');
         }
 
         //Update the queue

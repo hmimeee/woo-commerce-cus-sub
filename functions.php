@@ -174,9 +174,6 @@ function add_to_queue()
             $sub = $instance->get_subscription();
             $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
 
-            if ($queue)
-                $date->modify('+1 month');
-
             if ($sub) {
                 $item_with_price = array_filter(array_map(function ($q) {
                     if ($q->get_total() == '0')
@@ -294,7 +291,9 @@ function post_data_del()
 
             wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
             $item->update_meta_data('Deliverable Date', $from_date->format('F Y'));
-            $from_date->modify('+1 month');
+
+            if (end($items_to_change) != $item)
+                $from_date->modify('+1 month');
         }
 
         //Calculate the amounts
@@ -678,7 +677,7 @@ function renew_custom_subscription_confirm($sub_id)
     $instance = new Custom_Subscription;
     $instance->make_charge($sub);
     $date = date_create()->modify('+1 month');
-    
+
     $sub->update_dates([
         'next_payment' => $date->format('Y-m-d H:i:s')
     ]);
