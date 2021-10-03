@@ -8,6 +8,24 @@
 require_once plugin_dir_path(__FILE__) . 'class-custom-subscription.php';
 require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
+/**
+ * Dump and die
+ * 
+ * @param mixed $data
+ * @return never
+ */
+function dd($data, $style = true)
+{
+	if (!$style) {
+		echo  '<pre>';
+		print_r($data);
+		die;
+	}
+	echo  '<pre style="background: #111; color: #3cb53c;">';
+	print_r($data);
+	die;
+}
+
 add_action('wp_enqueue_scripts', 'porto_child_css', 10);
 
 // Load CSS
@@ -704,7 +722,7 @@ function upgrade_custom_subscription()
     $has_var = new WC_Product_Variation($queue->variation_id);
 
     $variations = array_map(function ($v) use ($has_var) {
-        $var = $v['attributes']['attribute_type'] == 'Subscription' ? $v : null;
+        $var = $v['attributes']['attribute_types'] == 'Subscription' ? $v : null;
 
         if ($var)
             $var = [
@@ -733,15 +751,15 @@ function upgrade_custom_subscription_confirm()
     global $wpdb;
     $table = 'woocommerce_queue_data';
 
-    $items_not_delivered = array_map(function ($itm) {
-        return $itm->get_meta('Delivered') ? null : $itm;
+    $items_not_delivered = array_map(function ($itm) use ($instance) {
+        return $itm->get_meta('Delivered') || date('F Y') == $itm->get_meta('Deliverable Date') ? null : $itm;
     }, $sub->get_items());
 
     $items_not_delivered = array_filter($items_not_delivered);
     $first = reset($items_not_delivered);
 
     foreach ($sub->get_items() as $key => $item) {
-        if ($item->get_meta('Delivered')) {
+        if ($item->get_meta('Delivered') || date('F Y') == $item->get_meta('Deliverable Date')) {
             $item->set_total(0);
             $item->save();
             continue;
@@ -749,7 +767,7 @@ function upgrade_custom_subscription_confirm()
 
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
-            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription')
+            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_types'] == 'Subscription')
                 return $var;
 
             return null;

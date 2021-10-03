@@ -1,12 +1,12 @@
 <?php
 
-define('WP_DEBUG', true);
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// define('WP_DEBUG', true);
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
 
 get_header();
 /*
-Template Name: Subscription Queue
+Template Name: Subscription Queue Backup
 */
 
 if (is_user_logged_in()) {
@@ -17,15 +17,10 @@ if (is_user_logged_in()) {
 
 $instance = new Custom_Subscription();
 $queues = $instance->get_queues();
-$queue = count($queues) ? reset($queues) : null;
+$queue = count($queues) ? reset($instance->get_queues()) : null;
 $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : null;
 
-$data = [];
-foreach ($queues as $key => $dt) {
-    $data[$dt->year . $dt->month_id][] = $dt;
-}
-
-$queues = $data;
+$queues = $instance->get_queues();
 
 $sub = $instance->get_subscription();
 $items = [];
@@ -68,12 +63,11 @@ if ($sub)
                     </div>
 
                     <div class="col-md-6">
-                        <?php if (!empty($items) && false) : ?>
+                        <?php if (!empty($items)) : ?>
                             <div id="delivered">
                                 <?php
                                 foreach ($queues as $key => $data) :
                                     $product = wc_get_product($data->product_id);
-                                    dd($data);
                                     if (isset($items[$key]) && !$items[$key]->get_meta('Delivered'))
                                         continue;
                                 ?>
@@ -100,50 +94,92 @@ if ($sub)
                                 endforeach
                                 ?>
                             </div>
-                        <?php
-                        endif;
-                        foreach ($queues as $key => $bunch) :
-                        ?>
-
+                        <?php endif ?>
+                        <div class="sortable">
                             <?php
-                            $first = reset($bunch);
-                            $date = new DateTime($first->year . '-' . $first->month_id);
+                            foreach ($queues as $key => $data) :
+                                $product = wc_get_product($data->product_id);
+                                if (isset($items[$key]) && $items[$key]->get_meta('Delivered'))
+                                    continue;
                             ?>
-                            <h4><?= $date->format('Y-F') ?></h4>
-                            <div class="sortable">
-                                <?php
-                                foreach ($bunch as $key => $data) :
-                                    $product = wc_get_product($data->product_id);
-                                    if (isset($items[$key]) && $items[$key]->get_meta('Delivered'))
-                                        continue;
-                                ?>
-                                    <div class="card mb-3" style="max-width: 540px;">
-                                        <div class="row no-gutters">
-                                            <div class="col-md-4">
-                                                <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id), 'single-post-thumbnail')) ?>" data-id="<?= $data->product_id ?>" class="card-img" alt="<?= $product->get_name() ?>">
+                                <div class="single-sidebarproduct" data-id="<?= $data->id; ?>">
+                                    <h3><?= $date->format('F - Y'); ?></h3>
+                                    <div class="flexdiv">
+                                        <a href="<?= get_permalink($data->product_id) ?>" target="_blank">
+                                            <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id), 'single-post-thumbnail')) ?>" data-id="<?= $data->product_id ?>">
+                                            <div class="single-dt">
+                                                <h4>
+                                                    <?= $product->get_name() ?>
+                                                </h4>
+                                                <span>Get details</span>
+                                                <h5>Size:
+                                                    <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?>
+                                                </h5>
                                             </div>
-                                            <div class="col-md-6">
-                                                <div class="card-body">
-                                                    <h5 class="card-title"><?= $product->get_name() ?></h5>
-                                                    <p class="card-text">
-                                                        <a class="d-block" href="<?= get_permalink($data->product_id) ?>" target="_blank">
-                                                            <span>Get details</span>
-                                                        </a>
+                                        </a>
 
-                                                        <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></span>
-                                                    </p>
-                                                </div>
+                                        <div class="controls-option">
+                                            <div class="sideclose">
+                                                <button class="delbtn" data-customer="<?= $data->customer_id; ?>" data-id="<?= $data->id; ?>">
+                                                    <i class="fa fa-times" title="<?= _e('Remove') ?>"></i>
+                                                </button>
                                             </div>
-                                            <div class="col-md-2">
+                                            <div class="bars">
+                                                <a href="javascript:;">
+                                                    <i class="fa fa-bars" title="<?= _e('Move') ?>"></i>
+                                                </a>
                                             </div>
                                         </div>
                                     </div>
-                                <?php
-                                    $date->modify('+1 month');
-                                endforeach
-                                ?>
-                            </div>
-                        <?php endforeach ?>
+                                </div>
+                            <?php
+                                $date->modify('+1 month');
+                            endforeach
+                            ?>
+                        </div>
+                        <h1>Gaap</h1>
+                        <div class="sortable">
+                            <?php
+                            foreach ($queues as $key => $data) :
+                                $product = wc_get_product($data->product_id);
+                                if (isset($items[$key]) && $items[$key]->get_meta('Delivered'))
+                                    continue;
+                            ?>
+                                <div class="single-sidebarproduct" data-id="<?= $data->id; ?>">
+                                    <h3><?= $date->format('F - Y'); ?></h3>
+                                    <div class="flexdiv">
+                                        <a href="<?= get_permalink($data->product_id) ?>" target="_blank">
+                                            <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id), 'single-post-thumbnail')) ?>" data-id="<?= $data->product_id ?>">
+                                            <div class="single-dt">
+                                                <h4>
+                                                    <?= $product->get_name() ?>
+                                                </h4>
+                                                <span>Get details</span>
+                                                <h5>Size:
+                                                    <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?>
+                                                </h5>
+                                            </div>
+                                        </a>
+
+                                        <div class="controls-option">
+                                            <div class="sideclose">
+                                                <button class="delbtn" data-customer="<?= $data->customer_id; ?>" data-id="<?= $data->id; ?>">
+                                                    <i class="fa fa-times" title="<?= _e('Remove') ?>"></i>
+                                                </button>
+                                            </div>
+                                            <div class="bars">
+                                                <a href="javascript:;">
+                                                    <i class="fa fa-bars" title="<?= _e('Move') ?>"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php
+                                $date->modify('+1 month');
+                            endforeach
+                            ?>
+                        </div>
                     </div>
                 </div>
             </div>
