@@ -114,6 +114,16 @@ class Custom_Subscription
             WHERE  `customer_id` = $this->user_id
             AND  `id` = $single
             ORDER BY year ASC, month_id ASC";
+        } elseif ($order == 'date') {
+            $range = explode('-', $single);
+            $year = reset($range);
+            $month = end($range);
+
+            $query = "SELECT * FROM $table 
+            WHERE  `customer_id` = $this->user_id
+            AND  `year` = $year
+            AND  `month_id` = $month
+            ORDER BY year ASC, month_id ASC";
         } else {
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
@@ -122,7 +132,7 @@ class Custom_Subscription
         }
 
         $result = $wpdb->get_results($query);
-        if ($single)
+        if (!is_string($single) && $single == true)
             return end($result);
 
         return $result;

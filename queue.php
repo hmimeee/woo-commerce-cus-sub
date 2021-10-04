@@ -22,7 +22,7 @@ $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->
 
 $data = [];
 foreach ($queues as $key => $dt) {
-    $data[$dt->year . $dt->month_id][] = $dt;
+    $data[$dt->year][$dt->month_id][] = $dt;
 }
 
 $queues = $data;
@@ -68,82 +68,60 @@ if ($sub)
                     </div>
 
                     <div class="col-md-6">
-                        <?php if (!empty($items) && false) : ?>
-                            <div id="delivered">
-                                <?php
-                                foreach ($queues as $key => $data) :
-                                    $product = wc_get_product($data->product_id);
-                                    dd($data);
-                                    if (isset($items[$key]) && !$items[$key]->get_meta('Delivered'))
-                                        continue;
-                                ?>
-                                    <div class="single-sidebarproduct" data-id="<?= $data->id; ?>">
-                                        <h3><?= $date->format('F - Y'); ?></h3>
-                                        <div class="flexdiv">
-                                            <a href="<?= get_permalink($data->product_id) ?>" target="_blank">
-                                                <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id), 'single-post-thumbnail')) ?>" data-id="<?= $data->product_id ?>">
-                                                <div class="single-dt">
-                                                    <h4><?= $product->get_name() ?></h4>
-                                                    <span>Get details</span>
-                                                    <p>Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></p>
-                                                </div>
-                                            </a>
-
-                                            <div class="controls-option">
-                                                <i class="fa fa-check text-success" title="<?= _e('Delivered') ?>"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                <?php
-                                    $date->modify('+1 month');
-                                endforeach
-                                ?>
-                            </div>
                         <?php
-                        endif;
-                        foreach ($queues as $key => $bunch) :
+                        foreach ($queues as $year => $monthBunch) :
+                            if (reset($queues) != $monthBunch) :
                         ?>
+                                <h4 class="text-center"><?= $year ?></h4>
 
                             <?php
-                            $first = reset($bunch);
-                            $date = new DateTime($first->year . '-' . $first->month_id);
-                            ?>
-                            <h4><?= $date->format('Y-F') ?></h4>
-                            <div class="sortable">
-                                <?php
-                                foreach ($bunch as $key => $data) :
-                                    $product = wc_get_product($data->product_id);
-                                    if (isset($items[$key]) && $items[$key]->get_meta('Delivered'))
-                                        continue;
-                                ?>
-                                    <div class="card mb-3" style="max-width: 540px;">
-                                        <div class="row no-gutters">
-                                            <div class="col-md-4">
-                                                <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id), 'single-post-thumbnail')) ?>" data-id="<?= $data->product_id ?>" class="card-img" alt="<?= $product->get_name() ?>">
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="card-body">
-                                                    <h5 class="card-title"><?= $product->get_name() ?></h5>
-                                                    <p class="card-text">
-                                                        <a class="d-block" href="<?= get_permalink($data->product_id) ?>" target="_blank">
-                                                            <span>Get details</span>
-                                                        </a>
+                            endif;
 
-                                                        <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></span>
-                                                    </p>
+                            foreach ($monthBunch as $month => $bunch) :
+                                $date = new DateTime($year . '-' . $month);
+                            ?>
+                                <h5><?= $date->format('F') ?></h5>
+                                <div class="queue-sort pb-2" data-delivery="<?= $date->format('Y-m') ?>">
+                                    <?php
+                                    foreach ($bunch as $key => $data) :
+                                        $product = wc_get_product($data->product_id);
+                                        $images = wp_get_attachment_image_src(get_post_thumbnail_id($data->product_id));
+                                        if (isset($items[$key]) && $items[$key]->get_meta('Delivered'))
+                                            continue;
+                                    ?>
+                                        <div class="card mb-3 shadow-sm" style="cursor: move" data-id="<?= $data->id ?>">
+                                            <div class="row no-gutters">
+                                                <div class="col-md-3">
+                                                    <img src="<?= reset($images) ?>" class="card-img w-75 mx-auto mt-2" alt="<?= $product->get_name() ?>">
+                                                </div>
+                                                <div class="col-md-8">
+                                                    <div class="card-body">
+                                                        <h5 class="card-title"><?= $product->get_name() ?></h5>
+                                                        <p class="card-text">
+                                                            <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></span>
+                                                            <br />
+                                                            <a href="<?= get_permalink($data->product_id) ?>" target="_blank">Get details</a>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-1">
+                                                    <a href="javascript:;" class="delbtn float-right pt-2 pr-3" data-id="<?= $data->id; ?>">
+                                                        <i class="fa fa-times d-none d-md-block" title="<?= _e('Remove') ?>"></i>
+                                                    </a>
+
+                                                    <button class="delbtn btn btn-danger btn-block d-block d-md-none" data-id="<?= $data->id; ?>">Remove</button>
                                                 </div>
                                             </div>
-                                            <div class="col-md-2">
-                                            </div>
                                         </div>
-                                    </div>
-                                <?php
-                                    $date->modify('+1 month');
-                                endforeach
-                                ?>
-                            </div>
-                        <?php endforeach ?>
+                                    <?php
+                                        $date->modify('+1 month');
+                                    endforeach
+                                    ?>
+                                </div>
+                        <?php
+                            endforeach;
+                        endforeach
+                        ?>
                     </div>
                 </div>
             </div>
@@ -221,40 +199,49 @@ if ($sub)
         });
     });
 
-    // $("#sortable").sortable({
-    //     start: function(e, ui) {
-    //         $(this).attr('data-previndex', ui.item.index());
-    //     },
-    //     update: function(e, ui) {
-    //         var dataid = ui.item.data('id');
-    //         var newIndex = ui.item.index();
-    //         var oldIndex = $(this).attr('data-previndex');
-    //         var element_id = ui.item.attr('id');
-    //         var ajaxurl = "/wp-admin/admin-ajax.php";
-
-    //         $.ajax({
-    //             type: 'POST',
-    //             url: ajaxurl,
-    //             data: {
-    //                 "action": "post_data_drag",
-    //                 "postdataid": dataid,
-    //                 "old_pos": oldIndex,
-    //                 "new_pos": newIndex
-    //             },
-    //             success: function(res) {
-    //                 if (res.status)
-    //                     location.reload();
-    //             }
-    //         });
-    //     }
-    // });
-    $(".sortable").sortable({
-        connectWith: ".sortable",
+    var $prevPos = '';
+    $(".queue-sort").sortable({
+        placeholder: "ui-state-highlight",
+        connectWith: ".queue-sort",
         start: function(e, info) {
             info.item.siblings(".selected").appendTo(info.item);
+            $prevPos = $(e.target);
         },
         stop: function(e, info) {
-            info.item.after(info.item.find(".single-sidebarproduct"))
+            info.item.after(info.item.find(".single-sidebarproduct"));
+            $prop = $(info.item[0]);
+            $delivery = $prop.parent().data('delivery');
+            $item = $prop.data('id');
+
+            if (!$prevPos.children().length) {
+                $(".queue-sort").sortable("cancel");
+                return alert('Every month must have at least one item');
+            }
+
+            if ($prop.parent().children().length > 2) {
+                $(".queue-sort").sortable("cancel");
+                return alert('Max item for the month exceeded');
+            }
+
+            $.ajax({
+                type: 'POST',
+                url: "/wp-admin/admin-ajax.php",
+                data: {
+                    "action": "post_data_drag",
+                    "item": $item,
+                    "delivery": $delivery,
+                    "prev_delivery": $prevPos.data('delivery'),
+                },
+                success: function(res) {
+                    if (res.status)
+                        location.reload();
+
+                    if (!res.status) {
+                        $(".queue-sort").sortable("cancel");
+                        alert(res.message);
+                    }
+                }
+            });
         }
     });
 

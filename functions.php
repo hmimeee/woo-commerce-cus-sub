@@ -16,14 +16,14 @@ require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
  */
 function dd($data, $style = true)
 {
-	if (!$style) {
-		echo  '<pre>';
-		print_r($data);
-		die;
-	}
-	echo  '<pre style="background: #111; color: #3cb53c;">';
-	print_r($data);
-	die;
+    if (!$style) {
+        echo  '<pre>';
+        print_r($data);
+        die;
+    }
+    echo  '<pre style="background: #111; color: #3cb53c;">';
+    print_r($data);
+    die;
 }
 
 add_action('wp_enqueue_scripts', 'porto_child_css', 10);
@@ -341,65 +341,81 @@ function post_data_drag()
     $instance = new Custom_Subscription();
 
     //get the required data from the database
-    $queue_row = $instance->get_queues($_POST['postdataid'], 'row');
+    $queue_row = $instance->get_queues($_POST['item'], 'row');
     $queues = $instance->get_queues();
-    $new_place = $_POST['new_pos'];
+    $date = new DateTime($_POST['delivery']);
+    $has_items = count($instance->get_queues($date->format('Y-n'), 'date'));
+    $date = new DateTime($_POST['prev_delivery']);
+    $had_items = $instance->get_queues($date->format('Y-n'), 'date');
+    dd($had_items);
+
+    if ($has_items == 2)
+        return wp_send_json([
+            'status' => false,
+            'message' => 'Max item for the month exceeded'
+        ]);
+
+    if ($had_items < 2)
+        return wp_send_json([
+            'status' => false,
+            'message' => 'Every month must have at least one item'
+        ]);
 
     //Predefine variables for the loop
-    $first_line = [];
-    $second_line = [];
-    $got_place = false;
-    $last_data = end($queues);
+    // $first_line = [];
+    // $second_line = [];
+    // $got_place = false;
+    // $last_data = end($queues);
 
-    //Queue re-arrange
-    foreach ($queues as $place => $data) {
-        if ($place == $new_place) {
-            $got_place = true;
+    // //Queue re-arrange
+    // foreach ($queues as $place => $data) {
+    //     if ($place == $new_place) {
+    //         $got_place = true;
 
-            if ($last_data != $data) {
-                $first_line[] = $queue_row;
-                $second_line[] = $data;
-            }
+    //         if ($last_data != $data) {
+    //             $first_line[] = $queue_row;
+    //             $second_line[] = $data;
+    //         }
 
-            if ($last_data == $data) {
-                $second_line[] = $queue_row;
-                $first_line[] = $data;
-            }
-        } else {
-            if ($got_place && $queue_row != $data)
-                $second_line[] = $data;
+    //         if ($last_data == $data) {
+    //             $second_line[] = $queue_row;
+    //             $first_line[] = $data;
+    //         }
+    //     } else {
+    //         if ($got_place && $queue_row != $data)
+    //             $second_line[] = $data;
 
-            if (!$got_place && $queue_row != $data)
-                $first_line[] = $data;
-        }
-    }
+    //         if (!$got_place && $queue_row != $data)
+    //             $first_line[] = $data;
+    //     }
+    // }
 
-    //Marge the lines into a list
-    $list = array_merge($first_line, $second_line);
+    // //Marge the lines into a list
+    // $list = array_merge($first_line, $second_line);
 
-    //Get the first day of the current month
-    $date = $instance->date;
+    // //Get the first day of the current month
+    // $date = $instance->date;
 
-    //Get the subscription data
-    $sub = $instance->get_subscription();
+    // //Get the subscription data
+    // $sub = $instance->get_subscription();
 
-    if (!$sub) {
-        $instance->update_queue_only($list);
+    // if (!$sub) {
+    //     $instance->update_queue_only($list);
 
-        //Return the response
-        return wp_send_json([
-            'status' => true,
-            'message' => 'Queue updated successfully'
-        ]);
-    }
+    //     //Return the response
+    //     return wp_send_json([
+    //         'status' => true,
+    //         'message' => 'Queue updated successfully'
+    //     ]);
+    // }
 
-    $instance->update_items($sub, $list);
+    // $instance->update_items($sub, $list);
 
-    //Return the response
-    return wp_send_json([
-        'status' => true,
-        'message' => 'Queue updated successfully'
-    ]);
+    // //Return the response
+    // return wp_send_json([
+    //     'status' => true,
+    //     'message' => 'Queue updated successfully'
+    // ]);
 }
 
 //Register the actions for ajax request
