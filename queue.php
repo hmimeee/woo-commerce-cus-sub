@@ -11,20 +11,26 @@ Template Name: Subscription Queue
 
 if (is_user_logged_in()) {
 } else {
-    wp_redirect(home_url('/my-account/'));
+    wp_redirect(home_url('/my-account'));
     exit();
 }
 
 $instance = new Custom_Subscription();
 $queues = $instance->get_queues();
 $queue = count($queues) ? reset($queues) : null;
-$date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : null;
 
+$start = new DateTime();
 $data = [];
-foreach ($queues as $key => $dt) {
-    $data[$dt->year][$dt->month_id][] = $dt;
-}
+$prev_pos = 1;
 
+foreach ($queues as $dt) {
+    if ($prev_pos != $dt->position) {
+        $prev_pos = $dt->position;
+        $start->modify('+1 month');
+    }
+
+    $data[$start->format('Y')][$dt->position][] = $dt;
+}
 $queues = $data;
 
 $sub = $instance->get_subscription();
@@ -68,20 +74,16 @@ if ($sub)
                     </div>
 
                     <div class="col-md-6">
-                        <?php
-                        foreach ($queues as $year => $monthBunch) :
-                            if (reset($queues) != $monthBunch) :
-                        ?>
-                                <h4 class="text-center"><?= $year ?></h4>
-
-                            <?php
-                            endif;
-
-                            foreach ($monthBunch as $month => $bunch) :
-                                $date = new DateTime($year . '-' . $month);
-                            ?>
+                        <?php $date = new DateTime();
+                        $catchYear = date('Y');
+                        foreach ($queues as $year => $monthBunch) : ?>
+                            <?php if ($catchYear != $year) {
+                                $catchYear = $year;
+                                print('<h4 class="text-center">' . $year . '</h4>');
+                            } ?>
+                            <?php foreach ($monthBunch as $position => $bunch) : ?>
                                 <h5><?= $date->format('F') ?></h5>
-                                <div class="queue-sort pb-2" data-delivery="<?= $date->format('Y-m') ?>">
+                                <div class="queue-sort" style="min-height: 118px;" data-position="<?= $position ?>">
                                     <?php
                                     foreach ($bunch as $key => $data) :
                                         $product = wc_get_product($data->product_id);
@@ -114,14 +116,38 @@ if ($sub)
                                             </div>
                                         </div>
                                     <?php
-                                        $date->modify('+1 month');
                                     endforeach
                                     ?>
                                 </div>
-                        <?php
+                            <?php
+                                $date->modify('+1 month');
                             endforeach;
-                        endforeach
-                        ?>
+                        endforeach;
+
+                        if ($date->format('Y') != $year) :
+                            ?>
+                            <h4 class="text-center"><?= $date->format('Y') ?></h4>
+                        <?php endif ?>
+                        <h5><?= $date->format('F') ?></h5>
+                        <div data-delivery="<?= $date->format('Y-m') ?>">
+                            <div class="card mb-3 shadow-sm ui-sortable-handle" style="cursor: copy" data-id="135">
+                                <div class="row no-gutters">
+                                    <div class="col-md-3">
+                                        <img src="https://static.thenounproject.com/png/94729-200.png" class="card-img w-75 mx-auto mt-2" alt="Miss Dior Absolutely Blooming">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Add new perfume</h5>
+                                            <p class="card-text">
+                                                <span class="text-muted">Click on the browse link and add new products</span>
+                                                <br>
+                                                <a href="/shop" target="_blank">Browse shop</a>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -199,7 +225,6 @@ if ($sub)
         });
     });
 
-    var $prevPos = '';
     $(".queue-sort").sortable({
         placeholder: "ui-state-highlight",
         connectWith: ".queue-sort",
@@ -210,18 +235,16 @@ if ($sub)
         stop: function(e, info) {
             info.item.after(info.item.find(".single-sidebarproduct"));
             $prop = $(info.item[0]);
-            $delivery = $prop.parent().data('delivery');
+            $position = $prop.parent().data('position');
             $item = $prop.data('id');
-
-            if (!$prevPos.children().length) {
-                $(".queue-sort").sortable("cancel");
-                return alert('Every month must have at least one item');
-            }
 
             if ($prop.parent().children().length > 2) {
                 $(".queue-sort").sortable("cancel");
-                return alert('Max item for the month exceeded');
+                return alert('Max item for the month has exceeded');
             }
+
+            if ($prevPos.data('position') == $position)
+                return false;
 
             $.ajax({
                 type: 'POST',
@@ -229,8 +252,8 @@ if ($sub)
                 data: {
                     "action": "post_data_drag",
                     "item": $item,
-                    "delivery": $delivery,
-                    "prev_delivery": $prevPos.data('delivery'),
+                    "position": $position,
+                    "prev_position": $prevPos.data('position'),
                 },
                 success: function(res) {
                     if (res.status)
@@ -245,21 +268,18 @@ if ($sub)
         }
     });
 
-    jQuery('.delbtn').click(function() {
-        var d = jQuery(this).data('id');
-        var c = jQuery(this).data('customer');
+    jQuery('.delbtn').click(function(e) {
+        let id = jQuery(this).data('id');
         if (!confirm("Are you sure you’d like to remove this item"))
             return false;
 
-        event.preventDefault();
-        var ajaxurl = "/wp-admin/admin-ajax.php";
+        e.preventDefault();
         jQuery.ajax({
             type: 'POST',
-            url: ajaxurl,
+            url: "/wp-admin/admin-ajax.php",
             data: {
                 "action": "post_data_del",
-                "productid": d,
-                "customerid": c
+                "item": id,
             },
             success: function(response) {
                 if (response.status)

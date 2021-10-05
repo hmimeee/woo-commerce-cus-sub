@@ -182,16 +182,8 @@ function add_to_queue()
                 'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
             ]);
 
-        // $has_product = $instance->get_queues($product_id, 'product');
-        // if ($has_product)
-        //     return wp_send_json([
-        //         'status' => false,
-        //         'message' => 'The product is already exists in the queue'
-        //     ]);
-
         if ($instance->add_to_queue($product_id, $variation_id)) {
             $sub = $instance->get_subscription();
-            $date = $queue ? DateTime::createFromFormat('Y-m', $queue->year . '-' . $queue->month_id) : new DateTime();
 
             if ($sub) {
                 $item_with_price = array_filter(array_map(function ($q) {
@@ -239,91 +231,110 @@ add_action('wp_ajax_nopriv_post_word_count', 'add_to_queue');
 // add to queue submission
 function post_data_del()
 {
-    $item_id = $_POST['productid'];
+    $item_id = $_POST['item'];
     if (!$item_id)
         return false;
 
-
     $instance = new Custom_Subscription;
     $queues = $instance->get_queues();
+    $item = $instance->get_queues($item_id, 'row');
+    $has_item = count($instance->get_queues($item->position, 'position'));
+    $had_position = $item->position;
 
-    //Queue re-arrange
-    global $wpdb;
-    $table = 'woocommerce_queue_data'; //Get the table name
-    $query = ''; //Balnk variable for the query
-    $deletable = null;
-    $date = new DateTime();
-    $from_date = $date;
-    foreach ($queues as $data) {
-        if ($item_id == $data->id) {
-            $deletable = $data;
-            $from_date = DateTime::createFromFormat('Y-n', $data->year . '-' . $data->month_id);
-        } elseif ($deletable) {
-            //Update queue data placing
-            $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id = $data->id;";
-            $date->modify('+1 month');
-        }
-    }
+    if ($has_item >= 2)
+        $instance->delete_data($item_id);
 
-    //Get the subscription data
-    $sub = $instance->get_subscription();
-
-    if (!$sub) {
-        $wpdb->delete(
-            $table,
-            array(
-                'id' => $deletable->id
-            ),
-            array(
-                '%d'
-            )
-        );
-    } else {
-        $items = $sub->get_items();
-        $has_delivered = $instance->get_delivered_items();
-        $items_to_change = array_diff($items, $has_delivered);
-        $queue = $instance->get_queues(true);
-        $variation = new WC_Product_Variation($queue->variation_id);
-
-        $date = count($items_to_change) ? DateTime::createFromFormat('F Y', reset($items_to_change)->get_meta('Deliverable Date')) : new DateTime();
-        foreach ($items_to_change as $item) {
-            $delivery = DateTime::createFromFormat('Y-n', $deletable->year . '-' . $deletable->month_id);
-            $product_id = intval($deletable->product_id);
-
-            if ($item->get_product()->get_id() == $product_id && $item->get_meta('Deliverable Date') == $delivery->format('F Y')) {
-
-                $wpdb->delete(
-                    $table,
-                    array(
-                        'id' => $deletable->id
-                    ),
-                    array(
-                        '%d'
-                    )
-                );
-
-                wc_delete_order_item($item->get_id());
+    if ($has_item < 2) {
+        foreach ($queues as $data) {
+            if ($item == $data)
                 continue;
+
+            $position = $data->position;
+            if ($had_position < $position) {
+                $instance->update_data($data->id, [
+                    'position' => $position - 1
+                ]);
             }
-
-            wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-            $item->update_meta_data('Deliverable Date', $date->format('F Y'));
-
-            if (end($items_to_change) != $item)
-                $date->modify('+1 month');
-        }
-
-        if (!empty($items_to_change)) {
-            //Calculate the amounts
-            $sub->calculate_totals();
-
-            //Update the subscription date
-            $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
         }
     }
 
-    //Update the queue
-    dbDelta($query);
+    // //Queue re-arrange
+    // global $wpdb;
+    // $table = 'woocommerce_queue_data'; //Get the table name
+    // $query = ''; //Balnk variable for the query
+    // $deletable = null;
+    // $date = new DateTime();
+    // $from_date = $date;
+    // foreach ($queues as $data) {
+    //     if ($item_id == $data->id) {
+    //         $deletable = $data;
+    //         $from_date = DateTime::createFromFormat('Y-n', $data->year . '-' . $data->month_id);
+    //     } elseif ($deletable) {
+    //         //Update queue data placing
+    //         $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id = $data->id;";
+    //         $date->modify('+1 month');
+    //     }
+    // }
+
+    // //Get the subscription data
+    // $sub = $instance->get_subscription();
+
+    // if (!$sub) {
+    //     $wpdb->delete(
+    //         $table,
+    //         array(
+    //             'id' => $deletable->id
+    //         ),
+    //         array(
+    //             '%d'
+    //         )
+    //     );
+    // } else {
+    //     $items = $sub->get_items();
+    //     $has_delivered = $instance->get_delivered_items();
+    //     $items_to_change = array_diff($items, $has_delivered);
+    //     $queue = $instance->get_queues(true);
+    //     $variation = new WC_Product_Variation($queue->variation_id);
+
+    //     $date = count($items_to_change) ? DateTime::createFromFormat('F Y', reset($items_to_change)->get_meta('Deliverable Date')) : new DateTime();
+    //     foreach ($items_to_change as $item) {
+    //         $delivery = DateTime::createFromFormat('Y-n', $deletable->year . '-' . $deletable->month_id);
+    //         $product_id = intval($deletable->product_id);
+
+    //         if ($item->get_product()->get_id() == $product_id && $item->get_meta('Deliverable Date') == $delivery->format('F Y')) {
+
+    //             $wpdb->delete(
+    //                 $table,
+    //                 array(
+    //                     'id' => $deletable->id
+    //                 ),
+    //                 array(
+    //                     '%d'
+    //                 )
+    //             );
+
+    //             wc_delete_order_item($item->get_id());
+    //             continue;
+    //         }
+
+    //         wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+    //         $item->update_meta_data('Deliverable Date', $date->format('F Y'));
+
+    //         if (end($items_to_change) != $item)
+    //             $date->modify('+1 month');
+    //     }
+
+    //     if (!empty($items_to_change)) {
+    //         //Calculate the amounts
+    //         $sub->calculate_totals();
+
+    //         //Update the subscription date
+    //         $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
+    //     }
+    // }
+
+    // //Update the queue
+    // dbDelta($query);
 
     return wp_send_json([
         'status' => true,
@@ -343,79 +354,57 @@ function post_data_drag()
     //get the required data from the database
     $queue_row = $instance->get_queues($_POST['item'], 'row');
     $queues = $instance->get_queues();
-    $date = new DateTime($_POST['delivery']);
-    $has_items = count($instance->get_queues($date->format('Y-n'), 'date'));
-    $date = new DateTime($_POST['prev_delivery']);
-    $had_items = $instance->get_queues($date->format('Y-n'), 'date');
-    dd($had_items);
+    $prev_position = $_POST['prev_position'];
+    $had_items = count($instance->get_queues($prev_position, 'position'));
+    $new_position = $_POST['position'];
+    $has_items = count($instance->get_queues($new_position, 'position'));
 
-    if ($has_items == 2)
+    if ($has_items >= 2)
         return wp_send_json([
             'status' => false,
             'message' => 'Max item for the month exceeded'
         ]);
 
-    if ($had_items < 2)
-        return wp_send_json([
-            'status' => false,
-            'message' => 'Every month must have at least one item'
-        ]);
+    if ($had_items >= 2 || end($queues) == $queue_row)
+        $instance->update_data($queue_row->id, array(
+            'position' => $new_position
+        ));
 
-    //Predefine variables for the loop
-    // $first_line = [];
-    // $second_line = [];
-    // $got_place = false;
-    // $last_data = end($queues);
+    if ($had_items < 2 && end($queues) != $queue_row) {
+        $instance->update_data($queue_row->id, array(
+            'position' => $new_position
+        ));
 
-    // //Queue re-arrange
-    // foreach ($queues as $place => $data) {
-    //     if ($place == $new_place) {
-    //         $got_place = true;
+        foreach ($queues as $data) {
+            if ($queue_row == $data)
+                continue;
 
-    //         if ($last_data != $data) {
-    //             $first_line[] = $queue_row;
-    //             $second_line[] = $data;
-    //         }
+            $position = $data->position;
+            if ($prev_position > $new_position) {
 
-    //         if ($last_data == $data) {
-    //             $second_line[] = $queue_row;
-    //             $first_line[] = $data;
-    //         }
-    //     } else {
-    //         if ($got_place && $queue_row != $data)
-    //             $second_line[] = $data;
+                if ($position >= $new_position && $position < $prev_position) {
+                    $instance->update_data($data->id, [
+                        'position' => $position + 1
+                    ]);
+                }
+            }
 
-    //         if (!$got_place && $queue_row != $data)
-    //             $first_line[] = $data;
-    //     }
-    // }
+            if ($prev_position < $new_position) {
 
-    // //Marge the lines into a list
-    // $list = array_merge($first_line, $second_line);
+                if ($position <= $new_position && $position > $prev_position) {
+                    $instance->update_data($data->id, [
+                        'position' => $position - 1
+                    ]);
+                }
+            }
+        }
+    }
 
-    // //Get the first day of the current month
-    // $date = $instance->date;
-
-    // //Get the subscription data
-    // $sub = $instance->get_subscription();
-
-    // if (!$sub) {
-    //     $instance->update_queue_only($list);
-
-    //     //Return the response
-    //     return wp_send_json([
-    //         'status' => true,
-    //         'message' => 'Queue updated successfully'
-    //     ]);
-    // }
-
-    // $instance->update_items($sub, $list);
-
-    // //Return the response
-    // return wp_send_json([
-    //     'status' => true,
-    //     'message' => 'Queue updated successfully'
-    // ]);
+    //Return the response
+    return wp_send_json([
+        'status' => true,
+        'message' => 'Queue updated successfully'
+    ]);
 }
 
 //Register the actions for ajax request

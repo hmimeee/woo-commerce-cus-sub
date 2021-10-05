@@ -88,7 +88,7 @@ class Custom_Subscription
      * Get the queues data
      * 
      * @param bool $single `true` means single row, else all rows and `is_numeric` value for product id. Also $order = `row` means row id.
-     * @param string $order Ordering data as `ASC` or `DESC`
+     * @param string|array $order Ordering data as `ASC` or `DESC`
      * @return mixed Array|Object
      */
     public function get_queues($single = false, $order = 'ASC')
@@ -101,38 +101,30 @@ class Custom_Subscription
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
                 AND  `product_id` IN ($single)
-                AND `status` = 'Active'
-                ORDER BY year ASC, month_id ASC";
+                ORDER BY position ASC";
         } elseif (is_numeric($single) && $order == 'product') {
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
                 AND `product_id` = $single
-                AND `status` = 'Active'
-                ORDER BY year ASC, month_id ASC";
+                ORDER BY position ASC";
         } elseif ($order == 'row') {
             $query = "SELECT * FROM $table 
             WHERE  `customer_id` = $this->user_id
             AND  `id` = $single
-            ORDER BY year ASC, month_id ASC";
-        } elseif ($order == 'date') {
-            $range = explode('-', $single);
-            $year = reset($range);
-            $month = end($range);
-
+            ORDER BY position ASC";
+        } elseif ($order == 'position') {
             $query = "SELECT * FROM $table 
             WHERE  `customer_id` = $this->user_id
-            AND  `year` = $year
-            AND  `month_id` = $month
-            ORDER BY year ASC, month_id ASC";
+            AND `position` = $single
+            ORDER BY position ASC";
         } else {
             $query = "SELECT * FROM $table
                 WHERE  `customer_id` = $this->user_id
-                AND `status` = 'Active'
-                ORDER BY year $order, month_id $order";
+                ORDER BY position ASC";
         }
 
         $result = $wpdb->get_results($query);
-        if (!is_string($single) && $single == true)
+        if ((!is_string($single) && $single == true) || $order == 'row')
             return end($result);
 
         return $result;
@@ -149,6 +141,38 @@ class Custom_Subscription
                 ORDER BY year ASC, month_id ASC";
 
         return $wpdb->query($query);
+    }
+
+    /**
+     * Delete the specific queue data
+     * 
+     * @param int $id ID of the queue data
+     * @return bool
+     */
+    public function delete_data(int $id)
+    {
+        //Queue data parsing
+        global $wpdb;
+        $table = 'woocommerce_queue_data';
+
+        $query = "DELETE FROM $table
+                WHERE  `id` = $id";
+
+        return $wpdb->query($query);
+    }
+
+    /**
+     * Update the specific queue data
+     * 
+     * @param int $id ID of the queue data
+     * @param array $data Data to be updated fo the queue. Array should be associative
+     * @return bool
+     */
+    public function update_data(int $id, array $data)
+    {
+        global $wpdb;
+        $table = 'woocommerce_queue_data';
+        return $wpdb->update($table, $data, array('id' => $id));
     }
 
     /**
@@ -327,9 +351,7 @@ class Custom_Subscription
                     'product_id' => $product_id,
                     'variation_id' => $variation_id,
                     'customer_id' => $this->user->ID,
-                    'month_id' => date('n'),
-                    'year' => date("Y"),
-                    'status' => 'Active'
+                    'position' => 1
                 ),
                 array(
                     '%s'
@@ -337,8 +359,6 @@ class Custom_Subscription
             );
         } else {
             $exist_product = end($this->get_queues());
-            $date = DateTime::createFromFormat('Y-m', $exist_product->year . '-' . $exist_product->month_id);
-            $date->modify('+1 month');
 
             $insert = $wpdb->insert(
                 'woocommerce_queue_data',
@@ -346,9 +366,7 @@ class Custom_Subscription
                     'product_id' => $product_id,
                     'variation_id' => $variation_id,
                     'customer_id' => $this->user->ID,
-                    'month_id' => $date->format('n'),
-                    'year' => $date->format('Y'),
-                    'status' => 'Active'
+                    'position' => $exist_product->position + 1
                 ),
                 array(
                     '%s'
