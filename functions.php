@@ -183,30 +183,6 @@ function add_to_queue()
             ]);
 
         if ($instance->add_to_queue($product_id, $variation_id)) {
-            $sub = $instance->get_subscription();
-
-            if ($sub) {
-                $item_with_price = array_filter(array_map(function ($q) {
-                    if ($q->get_total() == '0')
-                        return null;
-
-                    return $q;
-                }, $sub->get_items()));
-
-                $product = wc_get_product($product_id);
-                $item = $sub->add_product($product, 1, [
-                    'total' => $item_with_price ? 0 : $new_variation->price
-                ]);
-
-                //Add item meta to track the month
-                wc_add_order_item_meta($item, 'Size', $has_variation->attributes['pa_size']);
-                wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
-                $sub->calculate_totals();
-
-                //Update the subscription date
-                $sub->update_dates(array('end' => $date->format('Y-m-d H:i:s')));
-            }
-
             return wp_send_json([
                 'status' => true,
                 'message' => 'Your product has been added to the queue'
@@ -245,96 +221,20 @@ function post_data_del()
         $instance->delete_data($item_id);
 
     if ($has_item < 2) {
+        $instance->delete_data($item_id);
+
         foreach ($queues as $data) {
             if ($item == $data)
                 continue;
 
             $position = $data->position;
-            if ($had_position < $position) {
+            if ($had_position > $position) {
                 $instance->update_data($data->id, [
                     'position' => $position - 1
                 ]);
             }
         }
     }
-
-    // //Queue re-arrange
-    // global $wpdb;
-    // $table = 'woocommerce_queue_data'; //Get the table name
-    // $query = ''; //Balnk variable for the query
-    // $deletable = null;
-    // $date = new DateTime();
-    // $from_date = $date;
-    // foreach ($queues as $data) {
-    //     if ($item_id == $data->id) {
-    //         $deletable = $data;
-    //         $from_date = DateTime::createFromFormat('Y-n', $data->year . '-' . $data->month_id);
-    //     } elseif ($deletable) {
-    //         //Update queue data placing
-    //         $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id = $data->id;";
-    //         $date->modify('+1 month');
-    //     }
-    // }
-
-    // //Get the subscription data
-    // $sub = $instance->get_subscription();
-
-    // if (!$sub) {
-    //     $wpdb->delete(
-    //         $table,
-    //         array(
-    //             'id' => $deletable->id
-    //         ),
-    //         array(
-    //             '%d'
-    //         )
-    //     );
-    // } else {
-    //     $items = $sub->get_items();
-    //     $has_delivered = $instance->get_delivered_items();
-    //     $items_to_change = array_diff($items, $has_delivered);
-    //     $queue = $instance->get_queues(true);
-    //     $variation = new WC_Product_Variation($queue->variation_id);
-
-    //     $date = count($items_to_change) ? DateTime::createFromFormat('F Y', reset($items_to_change)->get_meta('Deliverable Date')) : new DateTime();
-    //     foreach ($items_to_change as $item) {
-    //         $delivery = DateTime::createFromFormat('Y-n', $deletable->year . '-' . $deletable->month_id);
-    //         $product_id = intval($deletable->product_id);
-
-    //         if ($item->get_product()->get_id() == $product_id && $item->get_meta('Deliverable Date') == $delivery->format('F Y')) {
-
-    //             $wpdb->delete(
-    //                 $table,
-    //                 array(
-    //                     'id' => $deletable->id
-    //                 ),
-    //                 array(
-    //                     '%d'
-    //                 )
-    //             );
-
-    //             wc_delete_order_item($item->get_id());
-    //             continue;
-    //         }
-
-    //         wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-    //         $item->update_meta_data('Deliverable Date', $date->format('F Y'));
-
-    //         if (end($items_to_change) != $item)
-    //             $date->modify('+1 month');
-    //     }
-
-    //     if (!empty($items_to_change)) {
-    //         //Calculate the amounts
-    //         $sub->calculate_totals();
-
-    //         //Update the subscription date
-    //         $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
-    //     }
-    // }
-
-    // //Update the queue
-    // dbDelta($query);
 
     return wp_send_json([
         'status' => true,
@@ -365,10 +265,11 @@ function post_data_drag()
             'message' => 'Max item for the month exceeded'
         ]);
 
-    if ($had_items >= 2 || end($queues) == $queue_row)
+    if ($had_items >= 2 || end($queues) == $queue_row) {
         $instance->update_data($queue_row->id, array(
             'position' => $new_position
         ));
+    }
 
     if ($had_items < 2 && end($queues) != $queue_row) {
         $instance->update_data($queue_row->id, array(
@@ -398,6 +299,16 @@ function post_data_drag()
                 }
             }
         }
+    }
+
+    //Get the subscription data
+    $sub = $instance->get_subscription();
+
+    if ($sub) {
+        //Remove all the items
+        $sub->remove_order_items();
+
+        $instance->update_subscription_items($sub);
     }
 
     //Return the response

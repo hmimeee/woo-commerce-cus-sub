@@ -155,8 +155,7 @@ class Custom_Subscription
         global $wpdb;
         $table = 'woocommerce_queue_data';
 
-        $query = "DELETE FROM $table
-                WHERE  `id` = $id";
+        $query = "DELETE FROM $table WHERE `id` = $id";
 
         return $wpdb->query($query);
     }
@@ -257,8 +256,9 @@ class Custom_Subscription
     {
         // Add product to the subscription
         $queues = $this->get_queues();
-        $date = clone $this->date;
+        $date = new DateTime();
         $count = 0;
+        $position = 1;
         foreach ($queues as $queue) {
             $product = wc_get_product($queue->product_id);
             $variation = new WC_Product_Variation($queue->variation_id);
@@ -267,23 +267,41 @@ class Custom_Subscription
             if (!$product)
                 continue;
 
-            if ($count == 0) {
-                $item = $sub->add_product($product, 1, ['total' => $this->get_amount($queue), 'month' => $date->format('F Y')]); //Set the product for the subscription with price for first product
-                wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-                wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
-            } else {
-                $item = $sub->add_product($product, 1, ['total' => 0]); //Set the product for the subscription
-                wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-                wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+            if ($queue->position != $position) {
+                $date->modify('+1 month');
+                $position = $queue->position;
             }
 
-            $count++;
-            $date->modify('+1 month');
+            $item = $sub->add_product($product, 1, [
+                'month' => $date->format('F Y')
+            ]); //Set the product for the subscription with price for first product
+
+            wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+            wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
         }
 
         //Update the dates
-        $end_date = (clone $this->date->modify('+' . count($queues) . ' month'))->modify('last day of this month')->format('Y-m-d H:i:s');
+        $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
         $sub->update_dates(array('end' => $end_date));
+    }
+
+    public function add_subscription_item($sub, $product_id, $variation_id, $date)
+    {
+        $product = wc_get_product($product_id);
+        $variation = new WC_Product_Variation($variation_id);
+
+        $item = $sub->add_product($product, 1, [
+            'month' => $date->format('F Y')
+        ]); //Set the product for the subscription with price for first product
+
+        wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+        wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+
+        //Update the dates
+        $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
+        $sub->update_dates(array('end' => $end_date));
+
+        return true;
     }
 
     /**
@@ -344,7 +362,7 @@ class Custom_Subscription
         $results = $this->get_queues();
         global $wpdb;
 
-        if (!$results) {
+        if (empty($results)) {
             $insert = $wpdb->insert(
                 'woocommerce_queue_data',
                 array(
@@ -358,7 +376,8 @@ class Custom_Subscription
                 )
             );
         } else {
-            $exist_product = end($this->get_queues());
+            $exist_product = end($results);
+            $count_data = count($this->get_queues($exist_product->position, 'position'));
 
             $insert = $wpdb->insert(
                 'woocommerce_queue_data',
@@ -366,12 +385,28 @@ class Custom_Subscription
                     'product_id' => $product_id,
                     'variation_id' => $variation_id,
                     'customer_id' => $this->user->ID,
-                    'position' => $exist_product->position + 1
+                    'position' => $count_data > 1 ? $exist_product->position + 1 : $exist_product->position
                 ),
                 array(
                     '%s'
                 )
             );
+        }
+
+        //Get the subscription data
+        $sub = $this->get_subscription();
+        if ($sub) {
+            $items = $sub->get_items();
+            $last_item = end($items);
+            $last_prev_item = prev($items);
+            $last_date = $last_item->get_meta('Deliverable Date');
+            $last_prev_date = $last_prev_item->get_meta('Deliverable Date');
+            $date = DateTime::createFromFormat('F Y', $last_date);
+
+            if ($last_date == $last_prev_date)
+                $date->modify('+1 month');
+
+            $this->add_subscription_item($sub, $product_id, $variation_id, $date);
         }
 
         return $insert;
@@ -410,90 +445,6 @@ class Custom_Subscription
         }
 
         return $delivered;
-    }
-
-    /**
-     * Update subscription items
-     * 
-     * @param mixed $sub Subscription object
-     * @param mixed|null $list Queue list
-     */
-    public function update_items($sub, $list = null)
-    {
-        //Marge the lines into a list
-        $list = $list ?? $this->get_queues();
-
-        //Get the first day of the current month
-        $date = $this->date;
-
-        //Get the items
-        $items = $sub->get_items();
-
-        $items_to_keep = []; //Empty array for the delivered items
-        foreach ($items as $key => $item) {
-
-            //Check if the item has been delivered, then add it to the keep list. Also update the date.
-            if ($item->get_meta('Delivered')) {
-                $items_to_keep[] = $item->get_product_id();
-                $date->modify('+1 month');
-                continue;
-            }
-
-            //Delete the item from the subscription
-            wc_delete_order_item($item->get_id());
-        }
-
-        $table = 'woocommerce_queue_data'; //Get the table name
-        $query = ''; //Balnk variable for the query
-        $add_price = false;
-        foreach ($list as $key => $data) {
-
-            //Check if the item has been delivered, then skip it
-            if (in_array($data->product_id, $items_to_keep)) {
-                $add_price = true;
-                continue;
-            }
-
-            $product = wc_get_product($data->product_id); //Get the product object
-            $variation = new WC_Product_Variation($data->variation_id); //Get the variation object
-            $price = $variation->price; //Get the amount of the variation
-
-            //Add amount if the item is first one, else 0 amount
-            if ($add_price) {
-                $item = $sub->add_product($product, 1, [
-                    'total' => $price
-                ]);
-                $add_price = false;
-            } else {
-                $item = $sub->add_product($product, 1, [
-                    'total' => 0
-                ]);
-            }
-
-            //Add item meta to track the month
-            wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-            wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
-
-            //Update queue data placement
-            $query .= "UPDATE " . $table . " SET month_id='" . $date->format('n') . "', year='" . $date->format('Y') . "' WHERE id=$data->id;";
-
-            //Check if the list has end
-            if (end($list) != $data)
-                $date->modify('+1 month');
-        }
-
-        //Get the subscription data
-        $sub = $this->get_subscription();
-
-        //Calculate the amounts
-        $sub->calculate_totals();
-
-        //Update the subscription date
-        $sub->update_dates(array('end' => $date->modify('last day of this month')->format('Y-m-d H:i:s')));
-
-        //Update the queue
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($query);
     }
 
     public function update_queue_only($list)
