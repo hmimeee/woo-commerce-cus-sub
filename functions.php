@@ -258,6 +258,15 @@ function post_data_drag()
     $had_items = count($instance->get_queues($prev_position, 'position'));
     $new_position = $_POST['position'];
     $has_items = count($instance->get_queues($new_position, 'position'));
+    $current_pos_item = $instance->get_queues($new_position, 'position');
+    $current_variation = new WC_Product_Variation(reset($current_pos_item)->variation_id);
+    $has_variation = new WC_Product_Variation($queue_row->variation_id);
+
+    if ($current_variation->get_id() && $current_variation->get_attribute('pa_size') != $has_variation->get_attribute('pa_size'))
+        return wp_send_json([
+            'status' => false,
+            'message' => 'You can\'t update current month after upgration'
+        ]);
 
     if ($has_items >= 2)
         return wp_send_json([
@@ -305,8 +314,13 @@ function post_data_drag()
     $sub = $instance->get_subscription();
 
     if ($sub) {
-        //Remove all the items
-        $sub->remove_order_items();
+        //Remove all non-delivered the items
+        foreach ($sub->get_items() as $id => $item) {
+            if ($item->get_meta('Delivered') == 'Yes')
+                continue;
+
+            wc_delete_order_item($item->get_id());
+        }
 
         $instance->update_subscription_items($sub);
     }
@@ -325,6 +339,8 @@ add_action('wp_ajax_nopriv_post_data_drag', 'post_data_drag');
 
 /**
  * Create subscription for the order
+ * This will check and create a subscription against the order]
+ * 
  */
 add_action('woocommerce_before_thankyou', 'has_custom_subscription_for_order');
 function has_custom_subscription_for_order()
@@ -341,6 +357,10 @@ function has_custom_subscription_for_order()
     //Redirect to the payment page
     if ($sub) {
         $sub = wcs_get_subscription($sub->get_id());
+
+        $instance = new Custom_Subscription();
+        $queue = $instance->get_queues(true);
+        $instance->delete_data($queue->position, true);
 
         wp_redirect("/queue");
         exit;
@@ -599,7 +619,12 @@ function force_save_information_for_subscription()
     }
 }
 
-//For recurring custom subscription
+/**
+ * For recurring custom subscription
+ * This will create a schedule action for the payment force charging the customer for next month
+ * also will create next date schedule
+ * 
+ */
 add_action('woocommerce_scheduled_subscription_payment', 'renew_custom_subscription', 0, 1);
 function renew_custom_subscription($sub_id)
 {
@@ -609,19 +634,78 @@ function renew_custom_subscription($sub_id)
     ]);
 }
 
+/**
+ * Recurring payment charging action handler
+ * This will charge the customer for the current month
+ * also will create next month schedule
+ * 
+ */
 add_action('renew_custom_subscription_confirm', 'renew_custom_subscription_confirm');
 function renew_custom_subscription_confirm($sub_id)
 {
+    //Get the subscription
     $sub = wcs_get_subscription($sub_id);
-    $instance = new Custom_Subscription;
-    $instance->make_charge($sub);
-    $date = date_create()->modify('+1 month');
+    $instance = new Custom_Subscription; //get the subscription instance'
 
+    //Create the order for recurring payment
+    $order = wc_create_order(array(
+        'customer_id'   => $sub->get_user_id(),
+        'parent'        => $sub->get_id()
+    ));
+
+    //Set the parent details to the created order
+    $order->set_parent_id($sub->get_id());
+    $order->set_address($sub->get_address());
+    $order->set_address($sub->get_address('shipping'), 'shipping');
+
+    //Find out the deliverable items
+    $deliverables = array_map(function ($itm) {
+        return !$itm->get_meta('Delivered') ? $itm : null;
+    }, $sub->get_items());
+    $deliverables = array_filter($deliverables);
+    $delivery_date = reset($deliverables)->get_meta('Deliverable Date');
+
+    //Add the deliverable items to the order
+    foreach ($deliverables as $itm) {
+        if ($itm->get_meta('Deliverable Date') == $delivery_date) {
+            $item = $order->add_product($itm->get_product(), 1, [
+                'total' => $itm->get_total()
+            ]);
+            wc_add_order_item_meta($item, 'Size', $itm->get_meta('Size'), true);
+            wc_add_order_item_meta($item, 'Deliverable Date', $itm->get_meta('Deliverable Date'), true);
+
+            wc_add_order_item_meta($itm->get_id(), 'Delivered', 'Yes', true);
+        }
+    }
+
+    //Calculate the amount of the order
+    $order->calculate_totals();
+
+    //Save the set data
+    $order->save();
+
+    //Prepare source from the subscription order
+    $stripe = new WC_Stripe_Sepa_Subs_Compat;
+    $source = $stripe->prepare_order_source($sub);
+
+    //Charge the user for the order
+    $instance->make_charge($order, $source);
+
+    //Delete the items from the queue of current month
+    $queue = $instance->get_queues(true);
+    $instance->delete_data($queue->position, true);
+
+    //Update the next payment date of the subscription
     $sub->update_dates([
-        'next_payment' => $date->format('Y-m-d H:i:s')
+        'next_payment' => (new DateTime())->modify('+1 month')->format('Y-m-d H:i:s')
     ]);
 }
 
+/**
+ * Upgrade subscription sizes response endpoint
+ * This will return sizes of the products
+ * 
+ */
 add_action('wp_ajax_upgrade_subscription', 'upgrade_custom_subscription');
 add_action('wp_ajax_nopriv_upgrade_subscription', 'upgrade_custom_subscription');
 function upgrade_custom_subscription()
@@ -638,14 +722,15 @@ function upgrade_custom_subscription()
     $has_var = new WC_Product_Variation($queue->variation_id);
 
     $variations = array_map(function ($v) use ($has_var) {
-        $var = $v['attributes']['attribute_types'] == 'Subscription' ? $v : null;
+        $var = $v['attributes']['attribute_type'] == 'Subscription' ? $v : null;
 
-        if ($var)
+        if ($var) {
             $var = [
                 'size' => $var['attributes']['attribute_pa_size'],
                 'price' => $var['display_price'],
                 'selected' => $has_var->attributes['pa_size'] == $var['attributes']['attribute_pa_size'] ? 'selected' : '',
             ];
+        }
 
         return $var;
     }, $product->get_available_variations());
@@ -655,57 +740,46 @@ function upgrade_custom_subscription()
     wp_send_json_success(array_values($variations));
 }
 
+/**
+ * Subscription upgarde confirm request handler
+ * This action will run during saving the upgrade size
+ *
+ */
 add_action('wp_ajax_upgrade_subscription_confirm', 'upgrade_custom_subscription_confirm');
 add_action('wp_ajax_nopriv_upgrade_subscription_confirm', 'upgrade_custom_subscription_confirm');
 function upgrade_custom_subscription_confirm()
 {
     $instance = new Custom_Subscription;
     $sub = $instance->get_subscription();
-    $queues = $instance->get_queues();
     $size = $_POST['size'];
-
     global $wpdb;
     $table = 'woocommerce_queue_data';
 
-    $items_not_delivered = array_map(function ($itm) use ($instance) {
-        return $itm->get_meta('Delivered') || date('F Y') == $itm->get_meta('Deliverable Date') ? null : $itm;
-    }, $sub->get_items());
-
-    $items_not_delivered = array_filter($items_not_delivered);
-    $first = reset($items_not_delivered);
-
-    foreach ($sub->get_items() as $key => $item) {
-        if ($item->get_meta('Delivered') || date('F Y') == $item->get_meta('Deliverable Date')) {
-            $item->set_total(0);
-            $item->save();
+    foreach ($sub->get_items() as $item) {
+        if ($item->get_meta('Delivered') || date('F Y') == $item->get_meta('Deliverable Date'))
             continue;
-        }
 
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
-            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_types'] == 'Subscription')
+            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription')
                 return $var;
 
             return null;
         }, $product->get_available_variations());
         $variation = reset(array_filter($variations));
 
-        if ($first == $item) {
-            $item->set_total($variation['display_price']);
-            $item->save();
-        } else {
-            $item->set_total(0);
-            $item->save();
-        }
+        if (!$variation)
+            continue;
 
+        $item->set_total($variation['display_price']);
+        $item->save();
         wc_update_order_item_meta($item->get_id(), 'Size', $variation['attributes']['attribute_pa_size']);
 
         $wpdb->update($table, [
             'variation_id' => $variation['variation_id'],
         ], [
             'product_id' => $product->get_id(),
-            'customer_id' => get_current_user_id(),
-            'status' => 'Active',
+            'customer_id' => get_current_user_id()
         ]);
     }
 

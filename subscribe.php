@@ -19,7 +19,7 @@ if ($sub && isset($_GET['upgrade'])) {
 } elseif ($sub) {
 
     // $stripe = new WC_Stripe_Sepa_Subs_Compat;
-	// $stripe->scheduled_subscription_payment($sub->get_total(), $sub);
+    // $stripe->scheduled_subscription_payment($sub->get_total(), $sub);
     $instance->update_subscription('active');
 
     //Redirect to the payment page
@@ -36,6 +36,7 @@ if (!$details->billing_address['billing_country'] && !$details->billing_address[
 
 //Queue first data
 $queue = $instance->get_queues(true);
+$queues = $instance->get_queues($queue->position, 'position');
 
 //Check if queue is empty
 if (!$queue) {
@@ -52,20 +53,22 @@ $order_id = $checkout->create_order($data);
 if (!$order_id)
     wp_redirect('queue');
 
-//Get the order object
-$order = wc_get_order($order_id);
+foreach ($queues as $key => $queue) {
+    //Get the order object
+    $order = wc_get_order($order_id);
 
-//Get the first product object
-$product = wc_get_product($queue->product_id);
+    //Get the first product object
+    $product = wc_get_product($queue->product_id);
 
-// //get the amount
-$variation = new WC_Product_Variation($queue->variation_id);
-$amount = $variation->price;
+    // //get the amount
+    $variation = new WC_Product_Variation($queue->variation_id);
+    $amount = $variation->price;
 
-//Add product to the order
-$item = $order->add_product($product, 1, ['total' => $amount]);
-wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
-wc_add_order_item_meta($item, 'Deliverable Date', $details->date->format('F Y'), true);
+    //Add product to the order
+    $item = $order->add_product($product, 1, ['total' => $amount]);
+    wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+    wc_add_order_item_meta($item, 'Deliverable Date', date('F Y'), true);
+}
 
 //Calculate the amounts
 $order->calculate_totals();

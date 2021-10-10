@@ -125,7 +125,7 @@ class Custom_Subscription
 
         $result = $wpdb->get_results($query);
         if ((!is_string($single) && $single == true) || $order == 'row')
-            return end($result);
+            return reset($result);
 
         return $result;
     }
@@ -149,13 +149,17 @@ class Custom_Subscription
      * @param int $id ID of the queue data
      * @return bool
      */
-    public function delete_data(int $id)
+    public function delete_data($id, $position = null)
     {
         //Queue data parsing
         global $wpdb;
         $table = 'woocommerce_queue_data';
+        $id = intval($id);
 
         $query = "DELETE FROM $table WHERE `id` = $id";
+
+        if ($position)
+            $query = "DELETE FROM $table WHERE `position` = $id";
 
         return $wpdb->query($query);
     }
@@ -241,7 +245,7 @@ class Custom_Subscription
         $stripe->save_source_to_order($sub, $prepared_source);
 
         //Add items to the subscription
-        $this->update_subscription_items($sub);
+        $this->update_subscription_items($sub, false, true);
 
         //Calculate the amounts
         $sub->calculate_totals();
@@ -252,14 +256,29 @@ class Custom_Subscription
         return $sub;
     }
 
-    public function update_subscription_items($sub)
+    public function update_subscription_items($sub, $has_delivery = false, $is_new = false)
     {
         // Add product to the subscription
         $queues = $this->get_queues();
-        $date = new DateTime();
-        $count = 0;
-        $position = 1;
-        foreach ($queues as $queue) {
+        $position = reset($queues)->position ?? 1;
+        $fposition = reset($queues)->position;
+
+        if ($has_delivery && !empty($sub->get_items())) {
+            $items = array_map(function ($itm) {
+                return $itm->get_meta('Delivered') == 'Yes' ? $itm : null;
+            }, $sub->get_items());
+
+            $items = array_filter($items);
+            $date = DateTime::createFromFormat('F Y', end($items)->get_meta('Deliverable Date'));
+            $date->modify('+1 month');
+
+            $parent = wc_get_order($sub->parent_id);
+            $parent_items = array_values($parent->get_items());
+        } else {
+            $date = new DateTime();
+        }
+
+        foreach ($queues as $key => $queue) {
             $product = wc_get_product($queue->product_id);
             $variation = new WC_Product_Variation($queue->variation_id);
 
@@ -273,16 +292,25 @@ class Custom_Subscription
             }
 
             $item = $sub->add_product($product, 1, [
-                'month' => $date->format('F Y')
+                'month' => $date->format('F Y'),
+                'total' => $variation->price
             ]); //Set the product for the subscription with price for first product
 
             wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
             wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+
+            if ($has_delivery && isset($parent_items[$key])) {
+                wc_add_order_item_meta($item, 'Delivered', 'Yes', true);
+            }
+
+            if ($is_new && $fposition == $queue->position) {
+                wc_add_order_item_meta($item, 'Delivered', 'Yes', true);
+            }
         }
 
         //Update the dates
-        $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
-        $sub->update_dates(array('end' => $end_date));
+        $date->modify('+1 month');
+        $sub->update_dates(array('end' => $date->format('Y-m-d H:i:s')));
     }
 
     public function add_subscription_item($sub, $product_id, $variation_id, $date)
@@ -469,23 +497,25 @@ class Custom_Subscription
         return true;
     }
 
-    public function make_charge($sub)
+    public function make_charge($order, $source = null)
     {
         $stripe = new WC_Stripe_Sepa_Subs_Compat;
 
         // Get source from order
-        $prepared_source = $stripe->prepare_order_source($sub);
+        $prepared_source = $source ?? $stripe->prepare_order_source($order);
         add_filter('wc_stripe_idempotency_key', [$this, 'change_idempotency_key'], 10, 2);
 
-        $request            = $stripe->generate_payment_request($sub, $prepared_source);
+        $request            = $stripe->generate_payment_request($order, $prepared_source);
         $request['capture'] = 'true';
-        $request['amount']  = WC_Stripe_Helper::get_stripe_amount($sub->get_total(), $request['currency']);
+        $request['amount']  = WC_Stripe_Helper::get_stripe_amount($order->get_total(), $request['currency']);
         $response           = WC_Stripe_API::request($request);
 
         if (empty($response->error)) {
-            do_action('wc_gateway_stripe_process_payment', $response, $sub);
-            $stripe->process_response($response, $sub);
+            do_action('wc_gateway_stripe_process_payment', $response, $order);
+            $stripe->process_response($response, $order);
         }
+
+        return true;
     }
 
     public function change_idempotency_key($idempotency_key, $request)
