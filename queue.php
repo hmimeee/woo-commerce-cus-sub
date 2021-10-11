@@ -79,7 +79,7 @@ if ($sub) {
                                 <h4><?= _e('Welcome') ?></h4>
                                 <h3><?= _e('Get your favorite scents in sequentially') ?></h3>
                                 <?php if (!empty($queue)) : ?>
-                                    <p class="mb-2"><?= _e('Current month charge:') ?> <b><?= $price ?>$</b></p>
+                                    <p class="mb-2"><?= _e('Next month charge:') ?> <b><?= $price ?>$</b></p>
                                     <p><?= _e('Subscription product:') ?> <b><?= $instance->get_subscription_metas($queue)['type'] ?></b></p>
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
