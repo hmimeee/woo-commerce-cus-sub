@@ -788,3 +788,21 @@ function upgrade_custom_subscription_confirm()
 
     wp_send_json_success('Upgration successfull');
 }
+
+add_filter('woocommerce_cart_item_name', 'change_orders_items_names', 1, 2);
+function change_orders_items_names($item_html, $item_array)
+{
+    $dom = new DOMDocument();
+    @$dom->loadHTML($item_html);
+
+    $exploded  = explode('-', $dom->textContent);
+    $name = reset($exploded);
+    $cats = explode(',', end($exploded));
+    $category = reset($cats);
+    $size = end($cats);
+    $new_name = $name . ' - ' . $size . ', ' . $category;
+
+    $dom->getElementsByTagName('a')[0]->nodeValue = $new_name;
+
+    return $dom->saveHTML();
+}
