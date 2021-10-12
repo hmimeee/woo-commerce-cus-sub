@@ -175,7 +175,9 @@ class Custom_Subscription
     {
         global $wpdb;
         $table = 'woocommerce_queue_data';
-        return $wpdb->update($table, $data, array('id' => $id));
+        $wpdb->update($table, $data, array('id' => $id));
+
+        return true;
     }
 
     /**
@@ -274,6 +276,8 @@ class Custom_Subscription
 
             $parent = wc_get_order($sub->parent_id);
             $parent_items = array_values($parent->get_items());
+        } elseif(!empty($sub->get_items())) {
+            $date = (new DateTime())->modify('+1 month');
         } else {
             $date = new DateTime();
         }
@@ -426,13 +430,21 @@ class Custom_Subscription
         if ($sub) {
             $items = $sub->get_items();
             $last_item = end($items);
-            $last_prev_item = prev($items);
-            $last_date = $last_item->get_meta('Deliverable Date');
-            $last_prev_date = $last_prev_item->get_meta('Deliverable Date');
-            $date = DateTime::createFromFormat('F Y', $last_date);
 
-            if ($last_date == $last_prev_date)
-                $date->modify('+1 month');
+            if (count($items) > 1) {
+                $last_prev_item = prev($items);
+                $last_date = $last_item->get_meta('Deliverable Date');
+                $last_prev_date = $last_prev_item->get_meta('Deliverable Date');
+                $date = DateTime::createFromFormat('F Y', $last_date);
+
+                if ($last_date == $last_prev_date)
+                    $date->modify('+1 month');
+            } elseif ($last_item) {
+                $last_date = $last_item->get_meta('Deliverable Date');
+                $date = DateTime::createFromFormat('F Y', $last_date)->modify('+1 month');
+            } else {
+                $date = new DateTime();
+            }
 
             $this->add_subscription_item($sub, $product_id, $variation_id, $date);
         }

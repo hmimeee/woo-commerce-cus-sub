@@ -62,7 +62,7 @@ if ($sub) {
     $order_items = $last_order->get_items();
     $order_delivery = reset($order_items)->get_meta('Deliverable Date');
     if ($order_delivery == date('F Y'))
-        $date = $date->modify('+1 month');
+        $date->modify('+1 month');
 }
 ?>
 
@@ -140,7 +140,7 @@ if ($sub) {
                         ?>
 
                         <?php
-                        $catchYear = date('Y');
+                        $catchYear = $date->format('Y');
                         foreach ($queues as $year => $monthBunch) : ?>
                             <?php if ($catchYear != $year) {
                                 $catchYear = $year;

@@ -158,29 +158,33 @@ function add_to_queue()
         }
 
         $instance = new Custom_Subscription();
-        $queue = end($instance->get_queues());
+        $qdata = $instance->get_queues();
+        $queue = end($qdata);
 
-        if (has_term('luxury', 'product_cat', $queue->product_id)) {
-            $has_package = 'luxury';
-        } else {
-            $has_package = 'regular';
+        //Check if the queue is empty
+        if ($queue) {
+            if (has_term('luxury', 'product_cat', $queue->product_id)) {
+                $has_package = 'luxury';
+            } else {
+                $has_package = 'regular';
+            }
+
+            if ($queue && $has_package != $package) {
+                return wp_send_json([
+                    'status' => false,
+                    'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
+                ]);
+            }
+
+            $has_variation = new WC_Product_Variation($queue->variation_id);
+            $new_variation = new WC_Product_Variation($variation_id);
+
+            if ($queue && $has_variation->price != $new_variation->price)
+                return wp_send_json([
+                    'status' => false,
+                    'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
+                ]);
         }
-
-        if ($queue && $has_package != $package) {
-            return wp_send_json([
-                'status' => false,
-                'message' => 'Your subscription is for <a href="/product-category/subscription/' . $has_package . '"><b>' . ucfirst($has_package) . '</b></a> products only'
-            ]);
-        }
-
-        $has_variation = new WC_Product_Variation($queue->variation_id);
-        $new_variation = new WC_Product_Variation($variation_id);
-
-        if ($queue && $has_variation->price != $new_variation->price)
-            return wp_send_json([
-                'status' => false,
-                'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
-            ]);
 
         if ($instance->add_to_queue($product_id, $variation_id)) {
             return wp_send_json([
@@ -234,6 +238,20 @@ function post_data_del()
                 ]);
             }
         }
+    }
+
+    //Get the subscription data
+    $sub = $instance->get_subscription();
+    if ($sub) {
+        //Remove all non-delivered the items
+        foreach ($sub->get_items() as $id => $item) {
+            if ($item->get_meta('Delivered') == 'Yes')
+                continue;
+
+            wc_delete_order_item($item->get_id());
+        }
+
+        $instance->update_subscription_items($sub);
     }
 
     return wp_send_json([
