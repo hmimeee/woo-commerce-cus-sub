@@ -46,6 +46,7 @@ if (!$queue) {
 
 //Create an order
 $data = array_merge($details->data, $details->billing_address, $details->shipping_address);
+WC()->cart->empty_cart();
 $checkout = new WC_Checkout();
 $order_id = $checkout->create_order($data);
 

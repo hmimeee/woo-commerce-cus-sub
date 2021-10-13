@@ -14,7 +14,7 @@ if (!$sub) {
     exit;
 }
 
-if(isset($_POST['suspend'])) {
+if (isset($_GET['suspend'])) {
     $sub->update_status('cancelled');
     $instance->empty_queue();
     wp_redirect('/queue');

@@ -18,6 +18,7 @@ if (is_user_logged_in()) {
 $instance = new Custom_Subscription();
 $queues = $instance->get_queues();
 $queue = count($queues) ? reset($queues) : null;
+$type = $instance->get_subscription_metas($queue)['type'];
 
 if ($queue) {
     $has_products = count($instance->get_queues($queue->position, 'position'));
@@ -63,6 +64,10 @@ if ($sub) {
     $order_delivery = reset($order_items)->get_meta('Deliverable Date');
     if ($order_delivery == date('F Y'))
         $date->modify('+1 month');
+
+    $last_product = reset($last_order->get_items())->get_product();
+    if (has_term('luxury', 'product_cat', $last_product->get_id()))
+        $type = 'Luxury';
 }
 ?>
 
@@ -81,16 +86,18 @@ if ($sub) {
                                 <h3><?= _e('Get your favorite scents in sequentially') ?></h3>
                                 <?php if (!empty($queue)) : ?>
                                     <p class="mb-2"><?= _e('Next month charge:') ?> <b><?= $price ?>$</b></p>
-                                    <p><?= _e('Subscription product:') ?> <b><?= $instance->get_subscription_metas($queue)['type'] ?></b></p>
+                                    <p><?= _e('Subscription product:') ?> <b><?= $type ?></b></p>
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
                                     <a href="/unsubscribe-intend" class="btn btn-primary btn-sm"><?= _e('Cancel Subscription') ?></a>
-                                <?php elseif (!empty($queue) && $sub && ($sub->get_status() == 'cancelled' || $sub->get_status() == 'on-hold')) : ?>
+                                <?php elseif (!empty($queue) && $sub && $sub->get_status() == 'on-hold') : ?>
                                     <a href="/subscribe-intend" class="btn btn-primary btn-sm"><?= _e('Re-subscription') ?></a>
                                 <?php elseif (!empty($queue)) : ?>
-                                    <a href="/subscribe-intend" class="btn btn-primary btn-sm"><?= _e('Subscribe') ?></a>
-                                <?php elseif (empty($queue)) : ?>
+                                    <a href="/subscribe-intend" class="btn btn-primary"><?= _e('Subscribe') ?></a>
+                                <?php elseif (empty($queue) && !$sub) : ?>
                                     <a href="/subscribe" class="btn btn-primary btn-sm"><?= _e('Choose Package') ?></a>
+                                <?php elseif ($sub) : ?>
+                                    <a href="/product-category/subscription/<?= strtolower($type) ?>" class="btn btn-primary btn-sm"><?= _e('Choose Products') ?></a>
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub) : ?>
                                     <a href="javascript:;" class="btn btn-primary btn-sm" id="upgrade"><?= _e('Upgrade/Downgrade') ?></a>

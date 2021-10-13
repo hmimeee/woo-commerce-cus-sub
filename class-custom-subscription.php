@@ -135,10 +135,7 @@ class Custom_Subscription
         //Queue data parsing
         global $wpdb;
         $table = 'woocommerce_queue_data';
-
-        $query = "DELETE FROM $table
-                WHERE  `customer_id` = $this->user_id
-                ORDER BY year ASC, month_id ASC";
+        $query = "DELETE FROM $table WHERE  `customer_id` = $this->user_id";
 
         return $wpdb->query($query);
     }
