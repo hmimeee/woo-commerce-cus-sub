@@ -67,6 +67,7 @@ if ($sub) {
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<link rel="stylesheet" href="<?= get_template_directory_uri() ?>-child/style.css">
 <div class="container">
     <div class="row">
         <div class="col-md-12">
@@ -83,16 +84,16 @@ if ($sub) {
                                     <p><?= _e('Subscription product:') ?> <b><?= $instance->get_subscription_metas($queue)['type'] ?></b></p>
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub && $sub->get_status() == 'active') : ?>
-                                    <a href="/unsubscribe-intend"><?= _e('Cancel Subscription') ?></a>
+                                    <a href="/unsubscribe-intend" class="btn btn-primary btn-sm"><?= _e('Cancel Subscription') ?></a>
                                 <?php elseif (!empty($queue) && $sub && ($sub->get_status() == 'cancelled' || $sub->get_status() == 'on-hold')) : ?>
-                                    <a href="/subscribe-intend"><?= _e('Re-subscription') ?></a>
+                                    <a href="/subscribe-intend" class="btn btn-primary btn-sm"><?= _e('Re-subscription') ?></a>
                                 <?php elseif (!empty($queue)) : ?>
-                                    <a href="/subscribe-intend"><?= _e('Subscribe') ?></a>
+                                    <a href="/subscribe-intend" class="btn btn-primary btn-sm"><?= _e('Subscribe') ?></a>
                                 <?php elseif (empty($queue)) : ?>
-                                    <a href="/subscribe"><?= _e('Choose Package') ?></a>
+                                    <a href="/subscribe" class="btn btn-primary btn-sm"><?= _e('Choose Package') ?></a>
                                 <?php endif ?>
                                 <?php if (!empty($queue) && $sub) : ?>
-                                    <a href="javascript:;" id="upgrade"><?= _e('Upgrade/Downgrade') ?></a>
+                                    <a href="javascript:;" class="btn btn-primary btn-sm" id="upgrade"><?= _e('Upgrade/Downgrade') ?></a>
                                 <?php endif ?>
                                 <div class="form-group">
                                 </div>

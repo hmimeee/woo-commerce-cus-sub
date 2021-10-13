@@ -11,7 +11,7 @@ $('#upgrade').click(function () {
         success: function (res) {
             if (res.success) {
                 $btn.hide();
-                $select = '<select id="variation" style="padding:10px 90px;">';
+                $select = '<select id="variation" style="padding:8px 80px; vertical-align: none;">';
                 for (let i = 0; i < res.data.length; i++) {
                     const variant = res.data[i];
                     $select += '<option value="' + variant.size + '" ' + variant.selected + '>' + variant.size + ' (' + variant.price + '$)</option>';
@@ -20,9 +20,9 @@ $('#upgrade').click(function () {
 
                 if (res.data.length) {
                     $btn.next('div.form-group').html($select);
-                    $btn.next('div.form-group').append('<button id="confirm-upgrade" class="m-2">Confirm</button>');
-                    $btn.next('div.form-group').append('<button id="cancel-upgrade" class="btn-secondary active">Cancel</button>');
-                    $btn.next('div.form-group').append('<button id="hard-upgrade">Suspend Subscription</button>');
+                    $btn.next('div.form-group').append('<button id="confirm-upgrade" class="m-2 btn btn-primary btn-sm">Confirm</button>');
+                    $btn.next('div.form-group').append('<button id="cancel-upgrade" class="m-2 btn btn-secondary btn-sm">Cancel</button>');
+                    $btn.next('div.form-group').append('<button id="hard-upgrade" class="m-2 btn btn-danger btn-sm">Suspend Subscription</button>');
                     $btn.next('div.form-group').append('<p class="text-left"><b>Note:</b> Suspending subscription will clear the queue and you have to prepare the queue again for new subscription.');
                 }
             }

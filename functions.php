@@ -735,8 +735,7 @@ function upgrade_custom_subscription()
     if (!$sub || !$queue)
         wp_send_json_error('No active subscription or empty queue');
 
-    $items = $sub->get_items();
-    $product = reset($items)->get_product();
+    $product = wc_get_product($queue->product_id);
     $has_var = new WC_Product_Variation($queue->variation_id);
 
     $variations = array_map(function ($v) use ($has_var) {
