@@ -16,3 +16,7 @@ Tags: woocommerce, corporate, ecommerce, responsive, blue, black, green, white, 
 .btn-sm {
     padding: .30rem .8rem !important;
 }
+
+a.btn {
+    border: none;
+}

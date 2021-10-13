@@ -221,6 +221,6 @@ if ($sub) {
 
 <script src="//code.jquery.com/jquery-1.12.4.js"></script>
 <script src="//code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-<script src="/wp-content/themes/porto-child/script.js"></script>
+<script src="/wp-content/themes/porto-child/script.js?v=1.2"></script>
 
 <?php get_footer(); ?>
