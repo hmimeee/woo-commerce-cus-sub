@@ -413,7 +413,7 @@ function hide_monthly_queue()
     ";
 }
 
-add_action('add_meta_boxes',  'item_delivery_status');
+// add_action('add_meta_boxes',  'item_delivery_status');
 function item_delivery_status()
 {
     add_meta_box(
@@ -806,20 +806,40 @@ function upgrade_custom_subscription_confirm()
     wp_send_json_success('Upgration successfull');
 }
 
+add_filter('woocommerce_cart_item_product', 'change_cart_item_product_data', 1);
+function change_cart_item_product_data($product)
+{
+    $product->set_name(change_product_custom_name($product->get_name()));
+    $product->name = change_product_custom_name($product->get_name());
+    return $product;
+}
+
 add_filter('woocommerce_cart_item_name', 'change_orders_items_names', 1, 2);
 function change_orders_items_names($item_html, $item_array)
 {
     $dom = new DOMDocument();
     @$dom->loadHTML($item_html);
+    $new_name = change_product_custom_name($dom->textContent);
 
-    $exploded  = explode('-', $dom->textContent);
+    $dom->getElementsByTagName('a')[0]->nodeValue = $new_name;
+
+    return $dom->saveHTML();
+}
+
+function change_product_custom_name($name)
+{
+    $exploded  = explode('-', $name);
     $name = reset($exploded);
     $cats = explode(',', end($exploded));
     $category = reset($cats);
     $size = end($cats);
     $new_name = $name . ' - ' . $size . ', ' . $category;
 
-    $dom->getElementsByTagName('a')[0]->nodeValue = $new_name;
+    return $new_name;
+}
 
-    return $dom->saveHTML();
+add_action('woocommerce_checkout_create_order_line_item', 'order_line_item_update_custom', 1);
+function order_line_item_update_custom($item)
+{
+    dd($item);
 }

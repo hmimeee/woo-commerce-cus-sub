@@ -34,6 +34,11 @@ if (!$details->billing_address['billing_country'] && !$details->billing_address[
     exit;
 }
 
+if (!$details->shipping_address['shipping_country'] && !$details->shipping_address['shipping_state']) {
+    wp_redirect('/my-account/edit-address/shipping/');
+    exit;
+}
+
 //Queue first data
 $queue = $instance->get_queues(true);
 $queues = $instance->get_queues($queue->position, 'position');
