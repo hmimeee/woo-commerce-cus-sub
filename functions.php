@@ -397,10 +397,8 @@ function payment_gateways_based_on_subscription($available_gateways)
 
     $order = wc_get_order(WC()->session->get('subscription_order'));
 
-    if ($order) {
-        unset($available_gateways['paypal']);
-        unset($available_gateways['cod']);
-    }
+    if ($order)
+        $available_gateways = array($available_gateways['stripe']);
 
     return $available_gateways;
 }
@@ -420,7 +418,7 @@ function item_delivery_status()
         'wc_subscription_item_delivery', // Unique ID
         'Item Delivery Status Update', // Box title
         'wc_subscription_item_delivery_html', // Content callback, must be of type callable
-        'shop_subscription', // Post type
+        'shop_subscription' // Post type
     );
 }
 
