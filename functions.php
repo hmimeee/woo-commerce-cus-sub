@@ -397,8 +397,9 @@ function payment_gateways_based_on_subscription($available_gateways)
 
     $order = wc_get_order(WC()->session->get('subscription_order'));
 
-    if ($order)
+    if ($order && (!WC()->session->get('cart') || empty(WC()->session->get('cart')))) {
         $available_gateways = array($available_gateways['stripe']);
+    }
 
     return $available_gateways;
 }
