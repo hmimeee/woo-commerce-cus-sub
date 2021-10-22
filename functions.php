@@ -398,7 +398,7 @@ function payment_gateways_based_on_subscription($available_gateways)
     $order = wc_get_order(WC()->session->get('subscription_order'));
 
     if ($order && (!WC()->session->get('cart') || empty(WC()->session->get('cart')))) {
-        $available_gateways = array($available_gateways['stripe']);
+        $available_gateways = array('stripe' => $available_gateways['stripe']);
     }
 
     return $available_gateways;
@@ -837,8 +837,8 @@ function change_product_custom_name($name)
     return $new_name;
 }
 
-add_action('woocommerce_checkout_create_order_line_item', 'order_line_item_update_custom', 1);
-function order_line_item_update_custom($item)
-{
-    dd($item);
-}
+// add_action('woocommerce_checkout_create_order_line_item', 'order_line_item_update_custom', 1);
+// function order_line_item_update_custom($item)
+// {
+//     dd($item);
+// }
