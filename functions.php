@@ -1,7 +1,7 @@
 <?php
-// define('WP_DEBUG', true);
-// error_reporting(E_ALL);
-// ini_set('display_errors', 1);
+define('WP_DEBUG', true);
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 // echo "<pre>";
 
@@ -819,8 +819,7 @@ function change_orders_items_names($item_html, $item_array)
     $dom = new DOMDocument();
     @$dom->loadHTML($item_html);
     $new_name = change_product_custom_name($dom->textContent);
-
-    $dom->getElementsByTagName('a')[0]->nodeValue = $new_name;
+    @$dom->getElementsByTagName('a')[0]->nodeValue = htmlspecialchars($new_name);
 
     return $dom->saveHTML();
 }
@@ -837,8 +836,42 @@ function change_product_custom_name($name)
     return $new_name;
 }
 
-add_action('woocommerce_checkout_create_order_line_item', 'order_line_item_update_custom', 1);
-function order_line_item_update_custom($item)
-{
-    dd($item);
+// Additional custom column
+add_filter( 'manage_edit-shop_order_columns', 'custom_shop_order_column', 20 );
+function custom_shop_order_column( $columns ) {
+    $reordered_columns = array();
+
+    foreach( $columns as $key => $column){
+        $reordered_columns[$key] = $column;
+        if( $key ==  'shipping_address' ){
+            $reordered_columns['coupons'] = __( 'Coupons', 'woocommerce');
+        }
+    }
+    return $reordered_columns;
 }
+
+// Custom column content
+add_action( 'manage_shop_order_posts_custom_column', 'custom_shop_order_column_used_coupons' );
+function custom_shop_order_column_used_coupons( $column ) {
+    global $post, $the_order;
+
+    if ( ! is_a( $the_order, 'WC_Order' ) ) {
+        $the_order = wc_get_order( $post->ID );
+    }
+
+    if ( 'coupons' === $column ) {
+        $coupon_codes = $the_order->get_coupon_codes();
+        
+        if ( ! empty($coupon_codes) ) {
+            echo implode(', ', $coupon_codes);
+        }
+    }
+}
+
+// add_action('woocommerce_admin_order_item_headers', 'woocommerce_admin_html_order_item_class_custom');
+// function woocommerce_admin_html_order_item_class_custom($order) {
+//     foreach ($order->get_items() as $key => $item) {
+
+//     }
+// }
+
