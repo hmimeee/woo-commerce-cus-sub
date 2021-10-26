@@ -29,12 +29,12 @@ if ($sub && isset($_GET['upgrade'])) {
 
 $details = $instance->order_details();
 
-if (!$details->billing_address['billing_country'] && !$details->billing_address['billing_state']) {
+if (!$details->billing_address['billing_first_name'] || !$details->billing_address['billing_country'] || !$details->billing_address['billing_state']) {
     wp_redirect('/my-account/edit-address/billing/');
     exit;
 }
 
-if (!$details->shipping_address['shipping_country'] && !$details->shipping_address['shipping_state']) {
+if (!$details->shipping_address['shipping_first_name'] || !$details->shipping_address['shipping_country'] || !$details->shipping_address['shipping_state']) {
     wp_redirect('/my-account/edit-address/shipping/');
     exit;
 }

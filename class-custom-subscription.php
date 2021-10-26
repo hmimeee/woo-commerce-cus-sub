@@ -273,7 +273,7 @@ class Custom_Subscription
 
             $parent = wc_get_order($sub->parent_id);
             $parent_items = array_values($parent->get_items());
-        } elseif(!empty($sub->get_items())) {
+        } elseif (!empty($sub->get_items())) {
             $date = (new DateTime())->modify('+1 month');
         } else {
             $date = new DateTime();
@@ -320,11 +320,15 @@ class Custom_Subscription
         $variation = new WC_Product_Variation($variation_id);
 
         $item = $sub->add_product($product, 1, [
-            'month' => $date->format('F Y')
+            'month' => $date->format('F Y'),
+            'total' => $variation->price
         ]); //Set the product for the subscription with price for first product
 
         wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
         wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
+
+        //Calculate the amounts
+        $sub->calculate_totals();
 
         //Update the dates
         $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
