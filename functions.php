@@ -830,48 +830,66 @@ function change_product_custom_name($name)
     $name = reset($exploded);
     $cats = explode(',', end($exploded));
     $category = reset($cats);
-    $size = end($cats);
-    $new_name = $name . ' - ' . $size . ', ' . $category;
+    $size = $category != end($cats) ? end($cats) : null;
+    $new_name = $name . ' - ' . ($size ? $size .  ', ' : null) . $category;
 
     return $new_name;
 }
 
 // Additional custom column
-add_filter( 'manage_edit-shop_order_columns', 'custom_shop_order_column', 20 );
-function custom_shop_order_column( $columns ) {
+add_filter('manage_edit-shop_order_columns', 'custom_shop_order_column', 20);
+function custom_shop_order_column($columns)
+{
     $reordered_columns = array();
 
-    foreach( $columns as $key => $column){
+    foreach ($columns as $key => $column) {
         $reordered_columns[$key] = $column;
-        if( $key ==  'shipping_address' ){
-            $reordered_columns['coupons'] = __( 'Coupons', 'woocommerce');
+        if ($key ==  'shipping_address') {
+            $reordered_columns['coupons'] = __('Coupons', 'woocommerce');
         }
     }
     return $reordered_columns;
 }
 
 // Custom column content
-add_action( 'manage_shop_order_posts_custom_column', 'custom_shop_order_column_used_coupons' );
-function custom_shop_order_column_used_coupons( $column ) {
+add_action('manage_shop_order_posts_custom_column', 'custom_shop_order_column_used_coupons');
+function custom_shop_order_column_used_coupons($column)
+{
     global $post, $the_order;
 
-    if ( ! is_a( $the_order, 'WC_Order' ) ) {
-        $the_order = wc_get_order( $post->ID );
+    if (!is_a($the_order, 'WC_Order')) {
+        $the_order = wc_get_order($post->ID);
     }
 
-    if ( 'coupons' === $column ) {
+    if ('coupons' === $column) {
         $coupon_codes = $the_order->get_coupon_codes();
-        
-        if ( ! empty($coupon_codes) ) {
+
+        if (!empty($coupon_codes)) {
             echo implode(', ', $coupon_codes);
         }
     }
 }
 
-// add_action('woocommerce_admin_order_item_headers', 'woocommerce_admin_html_order_item_class_custom');
-// function woocommerce_admin_html_order_item_class_custom($order) {
-//     foreach ($order->get_items() as $key => $item) {
+add_action('woocommerce_admin_order_item_headers', 'woocommerce_admin_html_order_item_class_custom');
+function woocommerce_admin_html_order_item_class_custom($order)
+{
+    $items = array_map(function ($item) {
+        $item->set_name(change_product_custom_name($item->get_name()));
+    }, $order->get_items());
 
-//     }
-// }
+    return $items;
+}
 
+add_filter('woocommerce_admin_order_preview_line_items', 'woocommerce_admin_order_preview_line_items_custom', 10, 2);
+function woocommerce_admin_order_preview_line_items_custom($items, $order)
+{
+    if ($order->get_status() != 'completed')
+        return $items;
+
+    $changedItems = array_map(function ($item) {
+        $item->set_name(change_product_custom_name($item->get_name()));
+        return $item;
+    }, $items);
+
+    return $changedItems;
+}
