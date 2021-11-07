@@ -724,7 +724,7 @@ function renew_custom_subscription_confirm($sub_id)
     }
 
     //Prepare source from the subscription order
-    $stripe = new WC_Stripe_Sepa_Subs_Compat;
+    $stripe = new WC_Stripe_Order_Handler();
     $source = $stripe->prepare_order_source($sub);
 
     //Charge the user for the order

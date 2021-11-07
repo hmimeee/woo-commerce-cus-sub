@@ -18,7 +18,7 @@ if ($sub && isset($_GET['upgrade'])) {
     exit;
 } elseif ($sub) {
 
-    // $stripe = new WC_Stripe_Sepa_Subs_Compat;
+    // $stripe = new WC_Stripe_Order_Handler;
     // $stripe->scheduled_subscription_payment($sub->get_total(), $sub);
     $instance->update_subscription('active');
 

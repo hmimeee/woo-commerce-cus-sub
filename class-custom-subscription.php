@@ -512,7 +512,7 @@ class Custom_Subscription
 
     public function make_charge($order, $source = null)
     {
-        $stripe = new WC_Stripe_Sepa_Subs_Compat;
+        $stripe = new WC_Stripe_Order_Handler;
 
         // Get source from order
         $prepared_source = $source ?? $stripe->prepare_order_source($order);
