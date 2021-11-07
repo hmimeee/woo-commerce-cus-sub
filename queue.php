@@ -1,8 +1,8 @@
 <?php
 
-// define('WP_DEBUG', true);
-// error_reporting(E_ALL);
-// ini_set('display_errors', 1);
+define('WP_DEBUG', true);
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 get_header();
 /*
@@ -61,13 +61,15 @@ if ($sub) {
 
     $last_order = reset($related_orders) ? reset($related_orders) : $sub->get_parent();
     $order_items = $last_order->get_items();
-    $order_delivery = reset($order_items)->get_meta('Deliverable Date');
+    $order_delivery = reset($order_items) ? reset($order_items)->get_meta('Deliverable Date') : null;
     if ($order_delivery == date('F Y'))
         $date->modify('+1 month');
 
-    $last_product = reset($last_order->get_items())->get_product();
-    if (has_term('luxury', 'product_cat', $last_product->get_id()))
-        $type = 'Luxury';
+    if (!empty($order_items)) {
+        $last_product = reset($order_items)->get_product();
+        if (has_term('luxury', 'product_cat', $last_product->get_id()))
+            $type = 'Luxury';
+    }
 }
 ?>
 

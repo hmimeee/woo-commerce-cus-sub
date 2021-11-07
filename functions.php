@@ -662,29 +662,51 @@ function renew_custom_subscription_confirm($sub_id)
 {
     //Get the subscription
     $sub = wcs_get_subscription($sub_id);
-    $instance = new Custom_Subscription; //get the subscription instance'
+    $instance = new Custom_Subscription; //get the subscription instance
+
+    //Check if the subscription is active
+    if ($sub->get_status() != 'active')
+        return false;
+
+    //Get the pending payment orders of the subscription
+    $orders = wc_get_orders(['parent' => $sub->get_id()]);
+    $pending_orders = array_map(function ($order) {
+        return $order->get_status() == 'pending' ? $order : null;
+    }, $orders);
+    $pending_orders = array_filter($pending_orders);
+
+    //Check whether the payment recurring worked previously
+    $has_order = !empty(reset($pending_orders)) ? reset($pending_orders) : null;
+
+    //If order found, then grab the order
+    if ($has_order)
+        $order = $has_order;
 
     //Create the order for recurring payment
-    $order = wc_create_order(array(
-        'customer_id'   => $sub->get_user_id(),
-        'parent'        => $sub->get_id()
-    ));
+    if (!$has_order) {
+        $order = wc_create_order(array(
+            'customer_id'   => $sub->get_user_id(),
+            'parent'        => $sub->get_id()
+        ));
 
-    //Set the parent details to the created order
-    $order->set_parent_id($sub->get_id());
-    $order->set_address($sub->get_address());
-    $order->set_address($sub->get_address('shipping'), 'shipping');
+        //Set the parent details to the created order
+        $order->set_parent_id($sub->get_id());
+        $order->set_address($sub->get_address());
+        $order->set_address($sub->get_address('shipping'), 'shipping');
 
-    //Find out the deliverable items
-    $deliverables = array_map(function ($itm) {
-        return !$itm->get_meta('Delivered') ? $itm : null;
-    }, $sub->get_items());
-    $deliverables = array_filter($deliverables);
-    $delivery_date = reset($deliverables)->get_meta('Deliverable Date');
+        //Find out the deliverable items and the date
+        $deliverables = array_map(function ($itm) {
+            return !$itm->get_meta('Delivered') ? $itm : null;
+        }, $sub->get_items());
+        $deliverables = array_filter($deliverables);
+        $delivery_date = !empty($deliverables) ? reset($deliverables)->get_meta('Deliverable Date') : null;
 
-    //Add the deliverable items to the order
-    foreach ($deliverables as $itm) {
-        if ($itm->get_meta('Deliverable Date') == $delivery_date) {
+        //Add the deliverable items to the order
+        foreach ($deliverables as $itm) {
+            //Check if the item has current delivery date
+            if ($itm->get_meta('Deliverable Date') != $delivery_date)
+                continue;
+
             $item = $order->add_product($itm->get_product(), 1, [
                 'total' => $itm->get_total()
             ]);
@@ -693,13 +715,13 @@ function renew_custom_subscription_confirm($sub_id)
 
             wc_add_order_item_meta($itm->get_id(), 'Delivered', 'Yes', true);
         }
+
+        //Calculate the amount of the order
+        $order->calculate_totals();
+
+        //Save the set data
+        $order->save();
     }
-
-    //Calculate the amount of the order
-    $order->calculate_totals();
-
-    //Save the set data
-    $order->save();
 
     //Prepare source from the subscription order
     $stripe = new WC_Stripe_Sepa_Subs_Compat;
@@ -712,10 +734,16 @@ function renew_custom_subscription_confirm($sub_id)
     $queue = $instance->get_queues(true);
     $instance->delete_data($queue->position, true);
 
-    //Update the next payment date of the subscription
-    $sub->update_dates([
-        'next_payment' => (new DateTime())->modify('+1 month')->format('Y-m-d H:i:s')
-    ]);
+    if ($order->get_status() == 'processing') {
+        //Update the next payment date of the subscription
+        $sub->update_dates([
+            'next_payment' => (new DateTime())->modify('+1 month')->format('Y-m-d H:i:s')
+        ]);
+    } else {
+        $sub->add_order_note('Payment failed');
+        $sub->update_status('on-hold');
+        $order->update_status('failed');
+    }
 }
 
 /**
@@ -883,8 +911,8 @@ function woocommerce_admin_html_order_item_class_custom($order)
 add_filter('woocommerce_admin_order_preview_line_items', 'woocommerce_admin_order_preview_line_items_custom', 10, 2);
 function woocommerce_admin_order_preview_line_items_custom($items, $order)
 {
-    if ($order->get_status() != 'completed')
-        return $items;
+    // if ($order->get_status() != 'completed')
+    //     return $items;
 
     $changedItems = array_map(function ($item) {
         $item->set_name(change_product_custom_name($item->get_name()));
