@@ -22,6 +22,7 @@ if (isset($_GET['suspend'])) {
 }
 
 $sub->update_status('on-hold');
+$sub->add_order_note('Order paused by the user');
 
 wp_redirect('/queue');
 exit;

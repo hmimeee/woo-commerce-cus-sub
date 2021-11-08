@@ -766,7 +766,8 @@ function upgrade_custom_subscription()
     $has_var = new WC_Product_Variation($queue->variation_id);
 
     $variations = array_map(function ($v) use ($has_var) {
-        $var = $v['attributes']['attribute_type'] == 'Subscription' ? $v : null;
+        $type = $v['attributes']['attribute_type'] ?? $v['attributes']['attribute_types'];
+        $var = $type == 'Subscription' ? $v : null;
 
         if ($var) {
             $var = [
@@ -778,6 +779,7 @@ function upgrade_custom_subscription()
 
         return $var;
     }, $product->get_available_variations());
+
     $variations = array_filter($variations);
     $variations = array_values($variations);
 
