@@ -632,7 +632,7 @@ function force_save_information_for_subscription()
             save = jQuery('#wc-stripe-new-payment-method');
             save.parent().html('<input type="hidden" id="wc-stripe-new-payment-method" name="wc-stripe-new-payment-method" value="true"/>');
         </script>
-<?php
+    <?php
     }
 }
 
@@ -922,4 +922,65 @@ function woocommerce_admin_order_preview_line_items_custom($items, $order)
     }, $items);
 
     return $changedItems;
+}
+
+add_action('add_meta_boxes',  'parent_order_details_show');
+function parent_order_details_show()
+{
+    add_meta_box(
+        'wc_parent_order_show', // Unique ID
+        'Parent Order Details', // Box title
+        'parent_order_details_show_html', // Content callback, must be of type callable
+        'shop_order' // Post type
+    );
+}
+
+function parent_order_details_show_html()
+{
+    $order = wc_get_order(get_the_ID());
+    $sub = wcs_get_subscription($order->get_parent_id());
+
+    if (!$sub)
+        return false;
+    ?>
+    <div class="woocommerce_subscriptions_related_orders">
+        <table>
+            <thead>
+                <tr>
+                    <th>Order Number</th>
+                    <th>Relationship</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <a href="/wp-admin/post.php?post=<?= $sub->get_id() ?>&amp;action=edit">
+                            #<?= $sub->get_id() ?>
+                        </a>
+                    </td>
+                    <td>
+                        Subscription
+                    </td>
+                    <td>
+                        <abbr title="<?= $sub->order_date ?>">
+                            <?= human_time_diff(strtotime($sub->order_date), current_time('U')) ?> </abbr>
+                    </td>
+                    <td>
+                        <?= $sub->get_status() ?>
+                    </td>
+                    <td>
+                        <span class="amount">
+                            <span class="woocommerce-Price-amount amount">
+                                <span class="woocommerce-Price-currencySymbol">$</span><?= $sub->get_total() ?>
+                            </span>
+                        </span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+<?php
 }

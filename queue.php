@@ -71,6 +71,9 @@ if ($sub) {
             $type = 'Luxury';
     }
 }
+
+// $date = (new DateTime())->modify('+1 minute');
+// $sub->update_dates(['next_payment' => $date->format('Y-m-d H:i:s')]);
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
