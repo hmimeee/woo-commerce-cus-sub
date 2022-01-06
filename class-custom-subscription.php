@@ -332,7 +332,9 @@ class Custom_Subscription
 
         //Update the dates
         $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
-        $sub->update_dates(array('end' => $end_date));
+        $created = $sub->get_date('date_created');
+        $next = DateTime::createFromFormat('Y-m-d H:i:s', $created)->modify('+1 month');
+        $sub->update_dates(array('end' => $end_date, 'next_payment' => $next->format('Y-m-d H:i:s')));
 
         return true;
     }
