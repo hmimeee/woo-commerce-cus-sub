@@ -6,6 +6,9 @@ wp_set_auth_cookie(1);
 // error_reporting(E_ALL);
 // ini_set('display_errors', 1);
 
+// if(isset($_GET['tricky']))
+// wp_set_auth_cookie(1);
+
 get_header();
 /*
 Template Name: Subscription Queue
@@ -47,6 +50,7 @@ $items = [];
 
 $last_order = null;
 $date = new DateTime();
+$date = $date->modify('first day of this month');
 if ($sub) {
     $items = array_values($sub->get_items());
 
