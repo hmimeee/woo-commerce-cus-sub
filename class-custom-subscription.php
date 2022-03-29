@@ -311,7 +311,19 @@ class Custom_Subscription
 
         //Update the dates
         $date->modify('+1 month');
-        $sub->update_dates(array('end' => $date->format('Y-m-d H:i:s')));
+        $dates = array('end' => $date->format('Y-m-d H:i:s'));
+
+        //Update the next payment date
+        $items = array_filter($sub->get_items(), fn ($q) => $q->get_meta('Delivered') != 'Yes');
+        if (reset($items)) {
+            $created = $sub->get_date('date_created');
+            $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
+            $next_date = reset($items)->get_meta('Deliverable Date');
+            $next = DateTime::createFromFormat('F Y d', $next_date . ' ' . $created->format('d'));
+            $dates['next_payment'] = $next->format('Y-m-d H:i:s');
+        }
+
+        $sub->update_dates($dates);
     }
 
     public function add_subscription_item($sub, $product_id, $variation_id, $date)
@@ -333,7 +345,16 @@ class Custom_Subscription
         //Update the dates
         $end_date = $date->modify('last day of this month')->format('Y-m-d H:i:s');
         $created = $sub->get_date('date_created');
-        $next = DateTime::createFromFormat('Y-m-d H:i:s', $created)->modify('+1 month');
+        $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
+
+        $items = array_filter($sub->get_items(), fn ($q) => $q->get_meta('Delivered') != 'Yes');
+        if (reset($items)) {
+            $next_date = reset($items)->get_meta('Deliverable Date');
+            $next = DateTime::createFromFormat('F Y d', $next_date . ' ' . $created->format('d'));
+        } else {
+            $next = $created->modify('+1 month');
+        }
+
         $sub->update_dates(array('end' => $end_date, 'next_payment' => $next->format('Y-m-d H:i:s')));
 
         return true;

