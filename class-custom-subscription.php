@@ -187,7 +187,7 @@ class Custom_Subscription
     {
         $queue = $queue ?? $this->get_queues(true);
         $variation = new WC_Product_Variation($queue->variation_id);
-        $price = $variation->price;
+        $price = $variation->get_price();
 
         return $price;
     }
@@ -264,11 +264,11 @@ class Custom_Subscription
 
         if ($has_delivery && !empty($sub->get_items())) {
             $items = array_map(function ($itm) {
-                return $itm->get_meta('Delivered') == 'Yes' ? $itm : null;
+                return wc_get_order_item_meta($itm->get_id(), 'Delivered') == 'Yes' ? $itm : null;
             }, $sub->get_items());
 
             $items = array_filter($items);
-            $date = DateTime::createFromFormat('F Y', end($items)->get_meta('Deliverable Date'));
+            $date = DateTime::createFromFormat('F Y', wc_get_order_item_meta(end($items)->get_id(), 'Deliverable Date'));
             $date->modify('+1 month');
 
             $parent = wc_get_order($sub->parent_id);
@@ -294,10 +294,10 @@ class Custom_Subscription
 
             $item = $sub->add_product($product, 1, [
                 'month' => $date->format('F Y'),
-                'total' => $variation->price
+                'total' => $variation->get_price()
             ]); //Set the product for the subscription with price for first product
 
-            wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+            wc_add_order_item_meta($item, 'Size', $variation->get_attribute('pa_size'));
             wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
 
             if ($has_delivery && isset($parent_items[$key])) {
@@ -314,11 +314,12 @@ class Custom_Subscription
         $dates = array('end' => $date->format('Y-m-d H:i:s'));
 
         //Update the next payment date
-        $items = array_filter($sub->get_items(), function($q) { return $q->get_meta('Delivered') != 'Yes';});
-        if (reset($items)) {
+        $items = array_filter($sub->get_items(), function($q) { return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';});
+        $first = reset($items);
+        if ($first) {
             $created = $sub->get_date('date_created');
             $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
-            $next_date = reset($items)->get_meta('Deliverable Date');
+            $next_date = wc_get_order_item_meta($first->get_id(), 'Deliverable Date');
             $next = DateTime::createFromFormat('F Y d', $next_date . ' ' . $created->format('d'));
             $dates['next_payment'] = $next->format('Y-m-d H:i:s');
         }
@@ -333,10 +334,10 @@ class Custom_Subscription
 
         $item = $sub->add_product($product, 1, [
             'month' => $date->format('F Y'),
-            'total' => $variation->price
+            'total' => $variation->get_price()
         ]); //Set the product for the subscription with price for first product
 
-        wc_add_order_item_meta($item, 'Size', $variation->attributes['pa_size']);
+        wc_add_order_item_meta($item, 'Size', $variation->get_attribute('pa_size'));
         wc_add_order_item_meta($item, 'Deliverable Date', $date->format('F Y'), true);
 
         //Calculate the amounts
@@ -347,9 +348,10 @@ class Custom_Subscription
         $created = $sub->get_date('date_created');
         $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
 
-        $items = array_filter($sub->get_items(), function($q) { return $q->get_meta('Delivered') != 'Yes';});
-        if (reset($items)) {
-            $next_date = reset($items)->get_meta('Deliverable Date');
+        $items = array_filter($sub->get_items(), function($q) { return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';});
+        $first = reset($items);
+        if ($first) {
+            $next_date = wc_get_order_item_meta($first->get_id(), 'Deliverable Date');
             $next = DateTime::createFromFormat('F Y d', $next_date . ' ' . $created->format('d'));
         } else {
             $next = $created->modify('+1 month');
@@ -457,14 +459,14 @@ class Custom_Subscription
 
             if (count($items) > 1) {
                 $last_prev_item = prev($items);
-                $last_date = $last_item->get_meta('Deliverable Date');
-                $last_prev_date = $last_prev_item->get_meta('Deliverable Date');
+                $last_date = wc_get_order_item_meta($last_item->get_id(),'Deliverable Date');
+                $last_prev_date = wc_get_order_item_meta($last_prev_item->get_id(), 'Deliverable Date');
                 $date = DateTime::createFromFormat('F Y', $last_date);
 
                 if ($last_date == $last_prev_date)
                     $date->modify('+1 month');
             } elseif ($last_item) {
-                $last_date = $last_item->get_meta('Deliverable Date');
+                $last_date = wc_get_order_item_meta($last_item->get_id(), 'Deliverable Date');
                 $date = DateTime::createFromFormat('F Y', $last_date)->modify('+1 month');
             } else {
                 $date = new DateTime();
@@ -488,7 +490,7 @@ class Custom_Subscription
         }
 
         return [
-            'price' => $variation->price,
+            'price' => $variation->get_price(),
             'type' => $package
         ];
     }
@@ -502,7 +504,7 @@ class Custom_Subscription
 
         $delivered = [];
         foreach ($items as $key => $item) {
-            if ($item->get_meta('Delivered')) {
+            if (wc_get_order_item_meta($item->get_id(), 'Delivered')) {
                 $delivered[] = $item;
                 continue;
             }

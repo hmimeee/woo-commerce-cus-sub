@@ -179,10 +179,10 @@ function add_to_queue()
             $has_variation = new WC_Product_Variation($queue->variation_id);
             $new_variation = new WC_Product_Variation($variation_id);
 
-            if ($queue && $has_variation->price != $new_variation->price)
+            if ($queue && $has_variation->get_price() != $new_variation->get_price())
                 return wp_send_json([
                     'status' => false,
-                    'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->attributes['pa_size']) . '</b></a> only'
+                    'message' => 'Your subscription variation is <b>' . ucfirst($has_variation->get_attribute('pa_size')) . '</b></a> only'
                 ]);
         }
 
@@ -245,7 +245,7 @@ function post_data_del()
     if ($sub) {
         //Remove all non-delivered the items
         foreach ($sub->get_items() as $id => $item) {
-            if ($item->get_meta('Delivered') == 'Yes')
+            if (wc_get_order_item_meta($item->get_id(), 'Delivered') == 'Yes')
                 continue;
 
             wc_delete_order_item($item->get_id());
@@ -334,7 +334,7 @@ function post_data_drag()
     if ($sub) {
         //Remove all non-delivered the items
         foreach ($sub->get_items() as $id => $item) {
-            if ($item->get_meta('Delivered') == 'Yes')
+            if (wc_get_order_item_meta($item->get_id(), 'Delivered') == 'Yes')
                 continue;
 
             wc_delete_order_item($item->get_id());
@@ -370,7 +370,7 @@ function has_custom_subscription_for_order()
         return false;
 
     $custom = new Custom_Subscription;
-    $sub = $custom->create_subscription($order->id);
+    $sub = $custom->create_subscription($order->get_id());
 
     //Redirect to the payment page
     if ($sub) {
@@ -435,10 +435,10 @@ function wc_subscription_item_delivery_html()
         <option value="">Select item</option>
         <?php foreach ($sub->get_items() as $key => $item) : ?>
             <?php
-            if ($item->get_meta('Delivered')) continue;
+            if (wc_get_order_item_meta($item->get_id(), 'Delivered')) continue;
             if (!$item->get_product()) continue;
             ?>
-            <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?> (<?= $item->get_meta('Deliverable Date') ?>)</option>
+            <option value='<?= $item->get_id() ?>'><?= $item->get_product()->name ?> (<?= wc_get_order_item_meta($item->get_id(), 'Deliverable Date') ?>)</option>
         <?php endforeach ?>
     </select>
     <a href="javascript:;" id="deliver_item" class="button">Set Delivered</a>
@@ -472,7 +472,7 @@ function deliver_item()
 {
     $sub = wcs_get_subscription($_POST['subscription']);
     $item = wcs_get_order_item($_POST['item'], $sub);
-    $has_delivered = $item->get_meta('Delivered');
+    $has_delivered = wc_get_order_item_meta($item->get_id(), 'Delivered');
 
     if ($has_delivered)
         //Return the response
@@ -482,7 +482,7 @@ function deliver_item()
         ]);
 
     wc_add_order_item_meta($item->get_id(), 'Delivered', 'Yes', true);
-    $sub->add_order_note('Item "' . $item->get_product()->name . '" for ' . $item->get_meta('Deliverable Date') . ' has been delivered.');
+    $sub->add_order_note('Item "' . $item->get_product()->name . '" for ' . wc_get_order_item_meta($item->get_id(), 'Deliverable Date') . ' has been delivered.');
 
     //Return the response
     return wp_send_json([
@@ -768,22 +768,22 @@ function renew_custom_subscription_confirm($sub_id)
 
         //Find out the deliverable items and the date
         $deliverables = array_map(function ($itm) {
-            return !$itm->get_meta('Delivered') ? $itm : null;
+            return !wc_get_order_item_meta($itm->get_id(), 'Delivered') ? $itm : null;
         }, $sub->get_items());
         $deliverables = array_filter($deliverables);
-        $delivery_date = !empty($deliverables) ? reset($deliverables)->get_meta('Deliverable Date') : null;
+        $delivery_date = !empty($deliverables) ? wc_get_order_item_meta(reset($deliverables)->get_id(), 'Deliverable Date') : null;
 
         //Add the deliverable items to the order
         foreach ($deliverables as $itm) {
             //Check if the item has current delivery date
-            if ($itm->get_meta('Deliverable Date') != $delivery_date)
+            if (wc_get_order_item_meta($itm->get_id(), 'Deliverable Date') != $delivery_date)
                 continue;
 
             $item = $order->add_product($itm->get_product(), 1, [
                 'total' => $itm->get_total()
             ]);
-            wc_add_order_item_meta($item, 'Size', $itm->get_meta('Size'), true);
-            wc_add_order_item_meta($item, 'Deliverable Date', $itm->get_meta('Deliverable Date'), true);
+            wc_add_order_item_meta($item, 'Size', wc_get_order_item_meta($itm->get_id(), 'Size'), true);
+            wc_add_order_item_meta($item, 'Deliverable Date', wc_get_order_item_meta($itm->get_id(), 'Deliverable Date'), true);
 
             wc_add_order_item_meta($itm->get_id(), 'Delivered', 'Yes', true);
         }
@@ -838,14 +838,14 @@ function upgrade_custom_subscription()
     $has_var = new WC_Product_Variation($queue->variation_id);
 
     $variations = array_map(function ($v) use ($has_var) {
-        $type = $v['attributes']['attribute_type'] ?? $v['attributes']['attribute_types'];
+        $type = $v->get_attribute('attribute_type') ?? $v->get_attribute('attribute_types');
         $var = $type == 'Subscription' ? $v : null;
 
         if ($var) {
             $var = [
-                'size' => $var['attributes']['attribute_pa_size'],
+                'size' => $var->get_attribute('attribute_pa_size'),
                 'price' => $var['display_price'],
-                'selected' => $has_var->attributes['pa_size'] == $var['attributes']['attribute_pa_size'] ? 'selected' : '',
+                'selected' => $has_var->get_attribute('pa_size') == $var->get_attribute('attribute_pa_size') ? 'selected' : '',
             ];
         }
 
@@ -874,12 +874,12 @@ function upgrade_custom_subscription_confirm()
     $table = 'woocommerce_queue_data';
 
     foreach ($sub->get_items() as $item) {
-        if ($item->get_meta('Delivered') || date('F Y') == $item->get_meta('Deliverable Date'))
+        if (wc_get_order_item_meta($item->get_id(), 'Delivered') || date('F Y') == wc_get_order_item_meta($item->get_id(), 'Deliverable Date'))
             continue;
 
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
-            if ($var['attributes']['attribute_pa_size'] == $size && $var['attributes']['attribute_type'] == 'Subscription')
+            if ($var->get_attribute('attribute_pa_size') == $size && $var->get_attribute('attribute_type') == 'Subscription')
                 return $var;
 
             return null;
@@ -891,7 +891,7 @@ function upgrade_custom_subscription_confirm()
 
         $item->set_total($variation['display_price']);
         $item->save();
-        wc_update_order_item_meta($item->get_id(), 'Size', $variation['attributes']['attribute_pa_size']);
+        wc_update_order_item_meta($item->get_id(), 'Size', $variation->get_attribute('attribute_pa_size'));
 
         $wpdb->update($table, [
             'variation_id' => $variation['variation_id'],

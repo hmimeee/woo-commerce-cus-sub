@@ -26,7 +26,7 @@ $type = $instance->get_subscription_metas($queue)['type'];
 if ($queue) {
     $has_products = count($instance->get_queues($queue->position, 'position'));
     $variation = new WC_Product_Variation($queue->variation_id);
-    $price = $has_products * $variation->price;
+    $price = $has_products * $variation->get_price();
 }
 
 $start = new DateTime();
@@ -54,8 +54,8 @@ if ($sub) {
 
     $formatted_items = [];
     foreach ($items as $itm) {
-        $dateTime = DateTime::createFromFormat('F Y', $itm->get_meta('Deliverable Date'));
-        if (!$itm->get_meta('Delivered'))
+        $dateTime = DateTime::createFromFormat('F Y', wc_get_order_item_meta($itm->get_id(), 'Deliverable Date'));
+        if (!wc_get_order_item_meta($itm->get_id(), 'Delivered'))
             $formatted_items[$dateTime->format('Y')][$dateTime->format('m')][] = $itm;
     }
 
@@ -65,7 +65,7 @@ if ($sub) {
 
     $last_order = reset($related_orders) ? reset($related_orders) : $sub->get_parent();
     $order_items = $last_order->get_items();
-    $order_delivery = reset($order_items) ? reset($order_items)->get_meta('Deliverable Date') : null;
+    $order_delivery = reset($order_items) ? wc_get_order_item_meta(reset($order_items)->get_id(), 'Deliverable Date') : null;
     if ($order_delivery == date('F Y'))
         $date->modify('+1 month');
 
@@ -118,7 +118,7 @@ if ($sub) {
                         <?php
                         if ($last_order) :
                             $delivered_items = $last_order->get_items();
-                            $ddate = $last_order->date_created;
+                            $ddate = $last_order->get_date_created();
 
                             if (date('Y') != $ddate->format('Y'))
                                 print('<h4 class="text-center">' . $year . '</h4>');
@@ -138,9 +138,9 @@ if ($sub) {
                                             <div class="card-body">
                                                 <h5 class="card-title"><?= $product->get_name() ?></h5>
                                                 <p class="card-text">
-                                                    <span class="text-muted">Size: <?= $ditem->get_meta('Size') ?></span>
+                                                    <span class="text-muted">Size: <?= wc_get_order_item_meta($ditem->get_id(), 'Size') ?></span>
                                                     <br />
-                                                    Delivery status: <span class="badge badge-info"><?= ucfirst($last_order->status) ?></span>
+                                                    Delivery status: <span class="badge badge-info"><?= ucfirst($last_order->get_status()) ?></span>
                                                     <br />
                                                     <a href="<?= get_permalink($product->get_id()) ?>" target="_blank">Get details</a>
                                                 </p>
@@ -177,7 +177,7 @@ if ($sub) {
                                                     <div class="card-body">
                                                         <h5 class="card-title"><?= $product->get_name() ?></h5>
                                                         <p class="card-text">
-                                                            <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></span>
+                                                            <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->get_attribute('pa_size') ?></span>
                                                             <br />
                                                             <a href="<?= get_permalink($data->product_id) ?>" target="_blank">Get details</a>
                                                         </p>
@@ -266,7 +266,7 @@ $type = $instance->get_subscription_metas($queue)['type'];
 if ($queue) {
     $has_products = count($instance->get_queues($queue->position, 'position'));
     $variation = new WC_Product_Variation($queue->variation_id);
-    $price = $has_products * $variation->price;
+    $price = $has_products * $variation->get_price();
 }
 
 $start = new DateTime();
@@ -294,8 +294,8 @@ if ($sub) {
 
     $formatted_items = [];
     foreach ($items as $itm) {
-        $dateTime = DateTime::createFromFormat('F Y', $itm->get_meta('Deliverable Date'));
-        if (!$itm->get_meta('Delivered'))
+        $dateTime = DateTime::createFromFormat('F Y', wc_get_order_item_meta($itm->get_id(), 'Deliverable Date'));
+        if (!wc_get_order_item_meta($itm->get_id(), 'Delivered'))
             $formatted_items[$dateTime->format('Y')][$dateTime->format('m')][] = $itm;
     }
 
@@ -305,7 +305,7 @@ if ($sub) {
 
     $last_order = reset($related_orders) ? reset($related_orders) : $sub->get_parent();
     $order_items = $last_order->get_items();
-    $order_delivery = reset($order_items) ? reset($order_items)->get_meta('Deliverable Date') : null;
+    $order_delivery = reset($order_items) ? wc_get_order_item_meta(reset($order_items)->get_id(), 'Deliverable Date') : null;
     if ($order_delivery == date('F Y'))
         $date->modify('+1 month');
 
@@ -358,7 +358,7 @@ if ($sub) {
                         <?php
                         if ($last_order) :
                             $delivered_items = $last_order->get_items();
-                            $ddate = $last_order->date_created;
+                            $ddate = $last_order->get_date_created();
 
                             if (date('Y') != $ddate->format('Y'))
                                 print('<h4 class="text-center">' . $year . '</h4>');
@@ -378,7 +378,7 @@ if ($sub) {
                                             <div class="card-body">
                                                 <h5 class="card-title"><?= $product->get_name() ?></h5>
                                                 <p class="card-text">
-                                                    <span class="text-muted">Size: <?= $ditem->get_meta('Size') ?></span>
+                                                    <span class="text-muted">Size: <?= wc_get_order_item_meta($ditem->get_id(), 'Size') ?></span>
                                                     <br />
                                                     Delivery status: <span class="badge badge-info"><?= ucfirst($last_order->status) ?></span>
                                                     <br />
@@ -417,7 +417,7 @@ if ($sub) {
                                                     <div class="card-body">
                                                         <h5 class="card-title"><?= $product->get_name() ?></h5>
                                                         <p class="card-text">
-                                                            <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->attributes['pa_size'] ?></span>
+                                                            <span class="text-muted">Size: <?= wc_get_product($data->variation_id)->get_attribute('pa_size') ?></span>
                                                             <br />
                                                             <a href="<?= get_permalink($data->product_id) ?>" target="_blank">Get details</a>
                                                         </p>
