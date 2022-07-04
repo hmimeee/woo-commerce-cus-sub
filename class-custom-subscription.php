@@ -314,7 +314,7 @@ class Custom_Subscription
         $dates = array('end' => $date->format('Y-m-d H:i:s'));
 
         //Update the next payment date
-        $items = array_filter($sub->get_items(), fn ($q) => $q->get_meta('Delivered') != 'Yes');
+        $items = array_filter($sub->get_items(), function($q) { return $q->get_meta('Delivered') != 'Yes';});
         if (reset($items)) {
             $created = $sub->get_date('date_created');
             $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
@@ -347,7 +347,7 @@ class Custom_Subscription
         $created = $sub->get_date('date_created');
         $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
 
-        $items = array_filter($sub->get_items(), fn ($q) => $q->get_meta('Delivered') != 'Yes');
+        $items = array_filter($sub->get_items(), function($q) { return $q->get_meta('Delivered') != 'Yes';});
         if (reset($items)) {
             $next_date = reset($items)->get_meta('Deliverable Date');
             $next = DateTime::createFromFormat('F Y d', $next_date . ' ' . $created->format('d'));

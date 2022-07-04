@@ -578,6 +578,78 @@ function customer_review_home()
     <?php
 }
 
+add_shortcode('product_customer_reviews', 'customer_review_page');
+function customer_review_page()
+{
+    $reviews = get_comments(array(
+        'post_per_page'      => -1,
+        'status'      => 'approve',
+        'post_status' => 'publish',
+        'post_type'   => 'product'
+    ));
+
+?>
+    <div class="container">
+        <div class="row">
+            <?php foreach ($reviews as $review) :
+                $product = wc_get_product($review->comment_post_ID);
+                $name_avatar = name_avatar_gen($review->comment_author);
+                $rating = reset(get_comment_meta($review->comment_ID)['rating']);
+                // echo '<pre>';
+            ?>
+                <div class="col-md-4">
+                    <div class="ivole-review-card cr-card-product">
+                        <div class="ivole-review-card-content">
+                            <div class="top-row">
+                                <div class="review-thumbnail">
+                                    <?= $name_avatar ?>
+                                </div>
+                                <div class="reviewer">
+                                    <div class="reviewer-name"><?= $review->comment_author ?></div>
+                                    <div class="reviewer-verified">
+                                        <i class="fa fa-check-circle"></i>
+                                        Verified owner
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="rating-row">
+                                <div class="rating">
+                                    <?= wc_get_rating_html($rating, 5) ?>
+                                </div>
+                                <div class="rating-label"><?= $rating ?>/5</div>
+                            </div>
+                            <div class="middle-row">
+                                <div class="review-content">
+                                    <p><?= $review->comment_content ?></p>
+                                </div>
+                                <div class="verified-review-row">
+                                    <div class="verified-badge">
+                                        <p class="ivole-verified-badge">
+                                            <i class="fa fa-shield"></i>
+                                            Verified review - <a href="/product/<?= $product->slug ?>" target="_blank" rel="nofollow noopener">view original</a>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="datetime"><?= time_elapsed_string($review->comment_date) ?></div>
+                            </div>
+                            <div class="review-product">
+                                <div class="product-thumbnail">
+                                    <img src="<?= reset(wp_get_attachment_image_src(get_post_thumbnail_id($product->get_id()), 'single-post-thumbnail')) ?>" class="attachment-woocommerce_gallery_thumbnail size-woocommerce_gallery_thumbnail">
+                                </div>
+                                <div class="product-title">
+                                    <a href="/product/<?= $product->slug ?>"><?= $product->get_name() ?></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach ?>
+        </div>
+    </div>
+    <?php
+}
+
+
 function time_elapsed_string($datetime, $full = false)
 {
     $now = new DateTime;
