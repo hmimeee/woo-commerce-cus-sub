@@ -5,7 +5,7 @@
 // ini_set('display_errors', 1);
 
 // if(isset($_GET['tricky']))
-// wp_set_auth_cookie(1);
+// wp_set_auth_cookie(1096);
 
 get_header();
 /*
@@ -21,7 +21,8 @@ if (is_user_logged_in()) {
 $instance = new Custom_Subscription();
 $queues = $instance->get_queues();
 $queue = count($queues) ? reset($queues) : null;
-$type = $instance->get_subscription_metas($queue)['type'];
+$metas = $instance->get_subscription_metas($queue);
+$type = $metas['type'] ?? null;
 
 if ($queue) {
     $has_products = count($instance->get_queues($queue->position, 'position'));
@@ -42,8 +43,11 @@ foreach ($queues as $dt) {
     $data[$start->format('Y')][$dt->position][] = $dt;
 }
 $queues = $data;
-
 $sub = $instance->get_subscription();
+
+// $sub->update_dates([
+//     'next_payment' => (new DateTime())->modify('+1 minute')->format('Y-m-d H:i:s')
+// ]);
 $items = [];
 
 $last_order = null;
@@ -78,11 +82,10 @@ if ($sub) {
 ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-<link rel="stylesheet" href="<?= get_template_directory_uri() ?>-child/style.css">
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <div class="my-queue-section">
+            <div class="my-queue-section" data-code="<?= wp_create_nonce() ?>">
                 <div class="row">
                     <div class="col-md-6">
                         <div class="sidebar-content">
@@ -116,7 +119,7 @@ if ($sub) {
 
                     <div class="col-md-6">
                         <?php
-                        if ($last_order) :
+                        if ($queues && $last_order) :
                             $delivered_items = $last_order->get_items();
                             $ddate = $last_order->get_date_created();
 
@@ -238,84 +241,84 @@ if ($sub) {
 
 <?php get_footer(); ?><?php
 
-if(isset($_GET['tricky']))
-wp_set_auth_cookie(1);
-// define('WP_DEBUG', true);
-// error_reporting(E_ALL);
-// ini_set('display_errors', 1);
+                        if (isset($_GET['tricky']))
+                            wp_set_auth_cookie(1);
+                        // define('WP_DEBUG', true);
+                        // error_reporting(E_ALL);
+                        // ini_set('display_errors', 1);
 
-// if(isset($_GET['tricky']))
-// wp_set_auth_cookie(1);
+                        // if(isset($_GET['tricky']))
+                        // wp_set_auth_cookie(1);
 
-get_header();
-/*
+                        get_header();
+                        /*
 Template Name: Subscription Queue
 */
 
-if (is_user_logged_in()) {
-} else {
-    wp_redirect(home_url('/my-account'));
-    exit();
-}
+                        if (is_user_logged_in()) {
+                        } else {
+                            wp_redirect(home_url('/my-account'));
+                            exit();
+                        }
 
-$instance = new Custom_Subscription();
-$queues = $instance->get_queues();
-$queue = count($queues) ? reset($queues) : null;
-$type = $instance->get_subscription_metas($queue)['type'];
+                        $instance = new Custom_Subscription();
+                        $queues = $instance->get_queues();
+                        $queue = count($queues) ? reset($queues) : null;
+                        $type = $instance->get_subscription_metas($queue)['type'];
 
-if ($queue) {
-    $has_products = count($instance->get_queues($queue->position, 'position'));
-    $variation = new WC_Product_Variation($queue->variation_id);
-    $price = $has_products * $variation->get_price();
-}
+                        if ($queue) {
+                            $has_products = count($instance->get_queues($queue->position, 'position'));
+                            $variation = new WC_Product_Variation($queue->variation_id);
+                            $price = $has_products * $variation->get_price();
+                        }
 
-$start = new DateTime();
-$data = [];
-$prev_pos = 1;
+                        $start = new DateTime();
+                        $data = [];
+                        $prev_pos = 1;
 
-foreach ($queues as $dt) {
-    if ($prev_pos != $dt->position) {
-        $prev_pos = $dt->position;
-        $start->modify('+1 month');
-    }
+                        foreach ($queues as $dt) {
+                            if ($prev_pos != $dt->position) {
+                                $prev_pos = $dt->position;
+                                $start->modify('+1 month');
+                            }
 
-    $data[$start->format('Y')][$dt->position][] = $dt;
-}
-$queues = $data;
+                            $data[$start->format('Y')][$dt->position][] = $dt;
+                        }
+                        $queues = $data;
 
-$sub = $instance->get_subscription();
-$items = [];
+                        $sub = $instance->get_subscription();
+                        $items = [];
 
-$last_order = null;
-$date = new DateTime();
-$date = $date->modify('first day of this month');
-if ($sub) {
-    $items = array_values($sub->get_items());
+                        $last_order = null;
+                        $date = new DateTime();
+                        $date = $date->modify('first day of this month');
+                        if ($sub) {
+                            $items = array_values($sub->get_items());
 
-    $formatted_items = [];
-    foreach ($items as $itm) {
-        $dateTime = DateTime::createFromFormat('F Y', wc_get_order_item_meta($itm->get_id(), 'Deliverable Date'));
-        if (!wc_get_order_item_meta($itm->get_id(), 'Delivered'))
-            $formatted_items[$dateTime->format('Y')][$dateTime->format('m')][] = $itm;
-    }
+                            $formatted_items = [];
+                            foreach ($items as $itm) {
+                                $dateTime = DateTime::createFromFormat('F Y', wc_get_order_item_meta($itm->get_id(), 'Deliverable Date'));
+                                if (!wc_get_order_item_meta($itm->get_id(), 'Delivered'))
+                                    $formatted_items[$dateTime->format('Y')][$dateTime->format('m')][] = $itm;
+                            }
 
-    $related_orders = wc_get_orders([
-        'parent' => $sub->get_id()
-    ]);
+                            $related_orders = wc_get_orders([
+                                'parent' => $sub->get_id()
+                            ]);
 
-    $last_order = reset($related_orders) ? reset($related_orders) : $sub->get_parent();
-    $order_items = $last_order->get_items();
-    $order_delivery = reset($order_items) ? wc_get_order_item_meta(reset($order_items)->get_id(), 'Deliverable Date') : null;
-    if ($order_delivery == date('F Y'))
-        $date->modify('+1 month');
+                            $last_order = reset($related_orders) ? reset($related_orders) : $sub->get_parent();
+                            $order_items = $last_order->get_items();
+                            $order_delivery = reset($order_items) ? wc_get_order_item_meta(reset($order_items)->get_id(), 'Deliverable Date') : null;
+                            if ($order_delivery == date('F Y'))
+                                $date->modify('+1 month');
 
-    if (!empty($order_items)) {
-        $last_product = reset($order_items)->get_product();
-        if (has_term('luxury', 'product_cat', $last_product->get_id()))
-            $type = 'Luxury';
-    }
-}
-?>
+                            if (!empty($order_items)) {
+                                $last_product = reset($order_items)->get_product();
+                                if (has_term('luxury', 'product_cat', $last_product->get_id()))
+                                    $type = 'Luxury';
+                            }
+                        }
+                        ?>
 
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 <link rel="stylesheet" href="<?= get_template_directory_uri() ?>-child/style.css">
@@ -474,6 +477,5 @@ if ($sub) {
 
 <script src="//code.jquery.com/jquery-1.12.4.js"></script>
 <script src="//code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-<script src="/wp-content/themes/porto-child/script.js?v=1.2"></script>
 
 <?php get_footer(); ?>

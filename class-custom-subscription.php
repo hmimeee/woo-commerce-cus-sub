@@ -4,9 +4,9 @@ class Custom_Subscription
 {
     public $user_id, $user, $date;
 
-    public function __construct()
+    public function __construct($user_id = null)
     {
-        $this->user_id = get_current_user_id();
+        $this->user_id = $user_id ?? get_current_user_id();
         $this->user = get_user_by('ID', $this->user_id);
 
         //Date object
@@ -314,7 +314,9 @@ class Custom_Subscription
         $dates = array('end' => $date->format('Y-m-d H:i:s'));
 
         //Update the next payment date
-        $items = array_filter($sub->get_items(), function($q) { return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';});
+        $items = array_filter($sub->get_items(), function ($q) {
+            return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';
+        });
         $first = reset($items);
         if ($first) {
             $created = $sub->get_date('date_created');
@@ -348,7 +350,9 @@ class Custom_Subscription
         $created = $sub->get_date('date_created');
         $created = DateTime::createFromFormat('Y-m-d H:i:s', $created);
 
-        $items = array_filter($sub->get_items(), function($q) { return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';});
+        $items = array_filter($sub->get_items(), function ($q) {
+            return wc_get_order_item_meta($q->get_id(), 'Delivered') != 'Yes';
+        });
         $first = reset($items);
         if ($first) {
             $next_date = wc_get_order_item_meta($first->get_id(), 'Deliverable Date');
@@ -459,7 +463,7 @@ class Custom_Subscription
 
             if (count($items) > 1) {
                 $last_prev_item = prev($items);
-                $last_date = wc_get_order_item_meta($last_item->get_id(),'Deliverable Date');
+                $last_date = wc_get_order_item_meta($last_item->get_id(), 'Deliverable Date');
                 $last_prev_date = wc_get_order_item_meta($last_prev_item->get_id(), 'Deliverable Date');
                 $date = DateTime::createFromFormat('F Y', $last_date);
 
@@ -480,6 +484,9 @@ class Custom_Subscription
 
     public function get_subscription_metas($queue)
     {
+        if (!$queue)
+            return [];
+
         $variation = new WC_Product_Variation($queue->variation_id);
         $product = wc_get_product($queue->product_id);
 

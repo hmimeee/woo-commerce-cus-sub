@@ -575,7 +575,7 @@ function customer_review_home()
             <?php endforeach ?>
         </div>
     </div>
-    <?php
+<?php
 }
 
 add_shortcode('product_customer_reviews', 'customer_review_page');
@@ -734,7 +734,7 @@ function renew_custom_subscription_confirm($sub_id)
 {
     //Get the subscription
     $sub = wcs_get_subscription($sub_id);
-    $instance = new Custom_Subscription; //get the subscription instance
+    $instance = new Custom_Subscription($sub->get_customer_id()); //get the subscription instance
 
     //Check if the subscription is active
     if ($sub->get_status() != 'active')
@@ -811,6 +811,8 @@ function renew_custom_subscription_confirm($sub_id)
         $sub->update_dates([
             'next_payment' => (new DateTime())->modify('+1 month')->format('Y-m-d H:i:s')
         ]);
+
+        $sub->add_order_note('Order created of ' . (new DateTime())->format('F Y'));
     } else {
         $sub->add_order_note('Payment failed');
         $sub->update_status('on-hold');
@@ -836,18 +838,16 @@ function upgrade_custom_subscription()
 
     $product = wc_get_product($queue->product_id);
     $has_var = new WC_Product_Variation($queue->variation_id);
-
     $variations = array_map(function ($v) use ($has_var) {
-        $type = $v->get_attribute('attribute_type') ?? $v->get_attribute('attribute_types');
+        $type = $v['attributes']['attribute_type'] ?? $v['attributes']['attribute_types'];
         $var = $type == 'Subscription' ? $v : null;
 
-        if ($var) {
+        if ($var)
             $var = [
-                'size' => $var->get_attribute('attribute_pa_size'),
+                'size' => $var['attributes']['attribute_pa_size'],
                 'price' => $var['display_price'],
-                'selected' => $has_var->get_attribute('pa_size') == $var->get_attribute('attribute_pa_size') ? 'selected' : '',
+                'selected' => $has_var->get_attribute('pa_size') == $var['attributes']['attribute_pa_size'] ? 'selected' : '',
             ];
-        }
 
         return $var;
     }, $product->get_available_variations());
@@ -877,9 +877,11 @@ function upgrade_custom_subscription_confirm()
         if (wc_get_order_item_meta($item->get_id(), 'Delivered') || date('F Y') == wc_get_order_item_meta($item->get_id(), 'Deliverable Date'))
             continue;
 
+
         $product = $item->get_product();
         $variations = array_map(function ($var) use ($size) {
-            if ($var->get_attribute('attribute_pa_size') == $size && $var->get_attribute('attribute_type') == 'Subscription')
+            $type = $var['attributes']['attribute_type'] ?? $var['attributes']['attribute_types'];
+            if ($var['attributes']['attribute_pa_size'] == $size && $type == 'Subscription')
                 return $var;
 
             return null;
@@ -891,7 +893,7 @@ function upgrade_custom_subscription_confirm()
 
         $item->set_total($variation['display_price']);
         $item->save();
-        wc_update_order_item_meta($item->get_id(), 'Size', $variation->get_attribute('attribute_pa_size'));
+        wc_update_order_item_meta($item->get_id(), 'Size', $variation['attributes']['attribute_pa_size']);
 
         $wpdb->update($table, [
             'variation_id' => $variation['variation_id'],

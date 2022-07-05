@@ -1,12 +1,12 @@
-$('#upgrade').click(function () {
-    $btn = $(this);
+$('body').on('click', '#upgrade', function (e) {
+    $btn = $(e.target);
     $btn.append(' <i class="fa fa-circle-notch fa-spin"></i>');
     $.ajax({
         url: '/wp-admin/admin-ajax.php',
         type: 'post',
         data: {
             'action': 'upgrade_subscription',
-            '_wpnonce': '<?= wp_create_nonce() ?>'
+            '_wpnonce': $('.my-queue-section').data('code')
         },
         success: function (res) {
             if (res.success) {
@@ -53,7 +53,7 @@ $('body').on('click', '#confirm-upgrade', function () {
         type: 'post',
         data: {
             'action': 'upgrade_subscription_confirm',
-            '_wpnonce': '<?= wp_create_nonce() ?>',
+            '_wpnonce': $('.my-queue-section').data('code'),
             'size': $('body').find('#variation').val(),
         },
         success: function (res) {
